@@ -1536,6 +1536,11 @@
           <input type="text" id="cardIssuer" class="input-text" placeholder="Exemplo: Inter, Nubank, Itaú, Bradesco" required autocomplete="off">
         </div>
 
+        <div class="input-field-group">
+          <label class="field-label" for="cardDueDay">Dia de vencimento da fatura (opcional)</label>
+          <input type="number" id="cardDueDay" class="input-text tabular-num" placeholder="Exemplo: 10" min="1" max="31">
+        </div>
+
         <button type="submit" class="btn-secondary" style="width: 100%;">
           Salvar cartão
         </button>
@@ -1659,6 +1664,7 @@
       setupTheme();
       loadDatabase();
       loadCards();
+      setupCardSelectionListener();
       setupGeminiKeyInput();
       setupCurrencyInputMask();
       updateInstallmentHint();
@@ -1709,13 +1715,13 @@
           cardsDB = JSON.parse(raw);
         } else {
           cardsDB = [
-            { id: 'card_inter', nickname: 'Meu Cartão Inter', issuer: 'Inter' }
+            { id: 'card_inter', nickname: 'Meu Cartão Inter', issuer: 'Inter', dueDay: 10 }
           ];
           localStorage.setItem(CARDS_KEY, JSON.stringify(cardsDB));
         }
       } catch (e) {
         cardsDB = [
-          { id: 'card_inter', nickname: 'Meu Cartão Inter', issuer: 'Inter' }
+          { id: 'card_inter', nickname: 'Meu Cartão Inter', issuer: 'Inter', dueDay: 10 }
         ];
       }
       populateCardsSelect();
@@ -1735,7 +1741,7 @@
       select.innerHTML = `
         <option value="">Sem cartão (Boleto, Pix ou Dinheiro)</option>
         ${cardsDB.map(card => `
-          <option value="${card.id}">${card.issuer} · ${card.nickname}</option>
+          <option value="${card.id}">${card.issuer} · ${card.nickname}${card.dueDay ? ` (Venc. dia ${card.dueDay})` : ''}</option>
         `).join('')}
       `;
 
@@ -1761,7 +1767,7 @@
         <div class="card-item-row">
           <div class="card-item-details">
             <span class="card-item-name">${card.nickname}</span>
-            <span class="card-item-issuer">${card.issuer}</span>
+            <span class="card-item-issuer">${card.issuer}${card.dueDay ? ` · Vencimento dia ${card.dueDay}` : ''}</span>
           </div>
           <button type="button" class="btn-remove-tx" onclick="removeCard('${card.id}')" aria-label="Remover cartão" title="Excluir cartão">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1778,9 +1784,11 @@
       event.preventDefault();
       const nicknameInput = document.getElementById('cardNickname');
       const issuerInput = document.getElementById('cardIssuer');
+      const dueDayInput = document.getElementById('cardDueDay');
 
       const nickname = nicknameInput.value.trim();
       const issuer = issuerInput.value.trim();
+      const cardDueDay = dueDayInput && dueDayInput.value ? parseInt(dueDayInput.value, 10) : null;
 
       if (!nickname || !issuer) {
         showToast('Preencha o apelido e o nome da prestadora');
@@ -1790,18 +1798,35 @@
       const newCard = {
         id: 'card_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
         nickname,
-        issuer
+        issuer,
+        dueDay: cardDueDay && cardDueDay >= 1 && cardDueDay <= 31 ? cardDueDay : null
       };
 
       cardsDB.push(newCard);
       saveCards();
 
       document.getElementById('expenseCard').value = newCard.id;
+      if (newCard.dueDay) {
+        document.getElementById('expenseDueDay').value = newCard.dueDay;
+      }
 
       nicknameInput.value = '';
       issuerInput.value = '';
+      if (dueDayInput) dueDayInput.value = '';
       closeCardModal();
       showToast(`Cartão ${issuer} cadastrado com sucesso`);
+    }
+
+    function setupCardSelectionListener() {
+      const select = document.getElementById('expenseCard');
+      select.addEventListener('change', () => {
+        const cardId = select.value;
+        if (!cardId) return;
+        const card = cardsDB.find(c => c.id === cardId);
+        if (card && card.dueDay) {
+          document.getElementById('expenseDueDay').value = card.dueDay;
+        }
+      });
     }
 
     function removeCard(id) {
@@ -1942,12 +1967,12 @@
 
       const prompt = `Analise a imagem deste comprovante de pagamento, cupom fiscal de maquininha ou anotação de gastos.
 Identifique:
-1) O nome comercial do estabelecimento ou descrição do gasto (exemplo: 'JF Carnes', 'Supermercado', 'Farmácia').
-2) O valor total numérico em reais pago.
-3) O dia da compra ou vencimento (número de 1 a 31).
+1) O nome comercial do estabelecimento ou descrição do gasto (exemplo: 'JF Carnes', 'Supermercado', 'Farmácia') em 'title'.
+2) O valor total numérico em reais pago em 'amount'.
+3) Apenas se for um boleto, conta de consumo ou fatura com vencimento explícito, informe o dia em 'dueDay'. Se for comprovante de maquininha de cartão ou cupom de compra, a data é da compra: defina 'dueDay': null e informe o dia em 'purchaseDay'.
 
 Retorne estritamente um JSON no formato:
-{"title":"Nome","amount":120.00,"dueDay":25}`;
+{"title":"Nome","amount":120.00,"dueDay":null,"purchaseDay":25}`;
 
       const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
 
@@ -1988,7 +2013,7 @@ Retorne estritamente um JSON no formato:
       }
 
       if (parsed) {
-        applyExtractedData(parsed.title, parsed.amount, parsed.dueDay);
+        applyExtractedData(parsed.title, parsed.amount, parsed.dueDay, parsed.purchaseDay, '');
       } else {
         throw new Error('Formato de resposta inesperado da IA');
       }
@@ -2018,10 +2043,10 @@ Retorne estritamente um JSON no formato:
       currentOcrWorker = null;
 
       const extracted = parseReceiptText(text);
-      applyExtractedData(extracted.title, extracted.amount, extracted.day, text);
+      applyExtractedData(extracted.title, extracted.amount, extracted.dueDay, extracted.purchaseDay, text);
     }
 
-    function applyExtractedData(title, amount, day, rawText) {
+    function applyExtractedData(title, amount, dueDay, purchaseDay, rawText) {
       updateScanProgress(100, 'Concluído');
 
       setTimeout(() => {
@@ -2031,7 +2056,8 @@ Retorne estritamente um JSON no formato:
         if (title || amount) {
           if (title) document.getElementById('expenseTitle').value = title;
           if (amount) document.getElementById('expenseAmount').value = formatBRLValueInput(amount);
-          if (day) document.getElementById('expenseDueDay').value = day;
+
+          let matchedCard = null;
 
           // Se identificou menção a algum cartão cadastrado no comprovante, seleciona automaticamente
           if (cardsDB && cardsDB.length > 0 && rawText) {
@@ -2040,14 +2066,34 @@ Retorne estritamente um JSON no formato:
               const nick = (card.nickname || '').toLowerCase();
               const iss = (card.issuer || '').toLowerCase();
               if ((nick.length >= 3 && lower.includes(nick)) || (iss.length >= 3 && lower.includes(iss))) {
-                document.getElementById('expenseCardId').value = card.id;
+                document.getElementById('expenseCard').value = card.id;
+                matchedCard = card;
                 break;
               }
             }
           }
 
-          showToast('Dados do comprovante preenchidos');
-          
+          // Se a conta tem vencimento explícito (ex: boleto/luz), usa o vencimento da conta
+          if (dueDay) {
+            document.getElementById('expenseDueDay').value = dueDay;
+          } else if (matchedCard && matchedCard.dueDay) {
+            // Se for compra em maquininha e tiver cartão com vencimento de fatura cadastrado, usa o vencimento do cartão
+            document.getElementById('expenseDueDay').value = matchedCard.dueDay;
+          } else {
+            // A data da compra não deve ser colocada no campo de vencimento
+            document.getElementById('expenseDueDay').value = '';
+          }
+
+          if (dueDay) {
+            showToast(`Dados preenchidos (vencimento dia ${dueDay})`);
+          } else if (matchedCard && matchedCard.dueDay) {
+            showToast(`Dados preenchidos (vencimento do cartão dia ${matchedCard.dueDay})`);
+          } else if (purchaseDay) {
+            showToast(`Dados preenchidos (compra realizada dia ${purchaseDay})`);
+          } else {
+            showToast('Dados do comprovante preenchidos');
+          }
+
           const formCard = document.querySelector('.form-card');
           if (formCard) {
             formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -2094,7 +2140,7 @@ Retorne estritamente um JSON no formato:
 
     /* PARSER AVANÇADO DE TEXTO PARA COMPROVANTES E NOTAS */
     function parseReceiptText(rawText) {
-      if (!rawText) return { amount: null, title: '', day: null };
+      if (!rawText) return { amount: null, title: '', dueDay: null, purchaseDay: null };
 
       const lines = rawText.split('\n')
         .map(l => l.trim())
@@ -2148,15 +2194,26 @@ Retorne estritamente um JSON no formato:
         if (maxVal > 0) foundAmount = maxVal;
       }
 
-      // 2. EXTRAÇÃO DE DATA (VENCIMENTO OU COMPRA)
-      let foundDay = null;
-      const dateMatch = rawText.match(/(?:data|vencimento|dia)?\s*[:\.]?\s*(\d{1,2})[\/\-\.](\d{1,2}|\w{3})[\/\-\.](\d{2,4})/i) ||
-                        rawText.match(/\b(\d{1,2})\s+(?:de\s+)?(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\b/i) ||
-                        rawText.match(/\bdia\s+(\d{1,2})\b/i);
+      // 2. EXTRAÇÃO DE DATAS: DISTINÇÃO ENTRE VENCIMENTO DE CONTA E DATA DA COMPRA
+      let foundDueDay = null;
+      let foundPurchaseDay = null;
 
-      if (dateMatch) {
-        const day = parseInt(dateMatch[1], 10);
-        if (day >= 1 && day <= 31) foundDay = day;
+      // Vencimento explícito (apenas contas de consumo, boletos e faturas com a palavra vencimento)
+      const dueMatch = rawText.match(/(?:vencimento|vence\s+em|venc\.?|pagar\s+at[eé]|data\s+limite)\s*[:\.]?\s*(\d{1,2})[\/\-\.](\d{1,2}|\w{3})[\/\-\.](\d{2,4})/i) ||
+                       rawText.match(/(?:vencimento|vence\s+em|venc\.?)\s*[:\.]?\s*dia\s*(\d{1,2})/i);
+
+      if (dueMatch) {
+        const day = parseInt(dueMatch[1], 10);
+        if (day >= 1 && day <= 31) foundDueDay = day;
+      }
+
+      // Data em que a compra/transação ocorreu (comprovantes de maquininha, cupons fiscais)
+      const purchaseMatch = rawText.match(/(?:data(?:\s*da\s*compra|\s*da\s*transa[cç][aã]o|\/hora)?|emiss[aã]o)?\s*[:\.]?\s*(\d{1,2})[\/\-\.](\d{1,2}|\w{3})[\/\-\.](\d{2,4})/i) ||
+                            rawText.match(/\b(\d{1,2})\s+(?:de\s+)?(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\b/i);
+
+      if (purchaseMatch) {
+        const day = parseInt(purchaseMatch[1], 10);
+        if (day >= 1 && day <= 31) foundPurchaseDay = day;
       }
 
       // 3. EXTRAÇÃO DE ESTABELECIMENTO COM SCORING INTELIGENTE
@@ -2212,7 +2269,8 @@ Retorne estritamente um JSON no formato:
       return {
         amount: foundAmount,
         title: bestTitle,
-        day: foundDay
+        dueDay: foundDueDay,
+        purchaseDay: foundPurchaseDay
       };
     }
 
