@@ -12,6 +12,9 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+  
+  <!-- TESSERACT.JS OCR MOTOR CLIENT-SIDE -->
+  <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
   <style>
     /* DESIGN TOKENS - TEMA CLARO */
@@ -446,11 +449,42 @@
       gap: 16px;
     }
 
+    .form-header-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
     .form-header-title {
       font-size: 16px;
       font-weight: 600;
       line-height: 1.2;
       color: var(--text);
+    }
+
+    .btn-scan-receipt {
+      height: 36px;
+      border-radius: var(--radius-sm);
+      background-color: var(--surface-2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 13px;
+      font-weight: 500;
+      font-family: inherit;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      padding: 0 12px;
+      cursor: pointer;
+      transition: all 160ms var(--ease);
+    }
+
+    .btn-scan-receipt:hover {
+      background-color: var(--border-hover);
+      border-color: var(--accent);
+      color: var(--accent);
     }
 
     .input-field-group {
@@ -520,7 +554,7 @@
       padding-left: 38px;
     }
 
-    /* SELECT ELEGANTE CUSTOMIZADO (SEM SETA GENÉRICA DE SISTEMA) */
+    /* SELECT ELEGANTE CUSTOMIZADO */
     .select-input {
       height: 44px;
       border: 1px solid var(--border);
@@ -634,7 +668,7 @@
       padding-top: 22px;
     }
 
-    /* CONTROLE STEPPER PROFISSIONAL (SUBSTITUI OS SPINNERS NATIVOS) */
+    /* CONTROLE STEPPER PROFISSIONAL */
     .stepper-control {
       height: 44px;
       border: 1px solid var(--border);
@@ -696,7 +730,7 @@
       padding: 0;
     }
 
-    /* ATALHOS RÁPIDOS DE PARCELAS (CHIPS PRESET) */
+    /* ATALHOS RÁPIDOS DE PARCELAS */
     .installment-quick-chips {
       display: flex;
       align-items: center;
@@ -1095,6 +1129,41 @@
       color: var(--accent);
     }
 
+    /* PAINEL DE SCAN DO COMPROVANTE */
+    .scan-preview-box {
+      width: 100%;
+      max-height: 180px;
+      border-radius: var(--radius-sm);
+      border: 1px solid var(--border);
+      overflow: hidden;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background-color: var(--surface-2);
+    }
+
+    .scan-preview-img {
+      max-width: 100%;
+      max-height: 180px;
+      object-fit: contain;
+    }
+
+    .scan-progress-bar-bg {
+      width: 100%;
+      height: 8px;
+      background-color: var(--surface-2);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .scan-progress-bar-fill {
+      height: 100%;
+      background-color: var(--accent);
+      width: 0%;
+      border-radius: 999px;
+      transition: width 150ms var(--ease);
+    }
+
     /* TOAST DISCRETO (REGRA 10: SUCESSO / ERRO) */
     .toast-container {
       position: fixed;
@@ -1232,7 +1301,19 @@
 
     <!-- FORMULÁRIO DE ADIÇÃO (APENAS 1 BOTÃO PRIMÁRIO NA TELA) -->
     <section class="form-card" aria-label="Formulário de inclusão de despesa">
-      <h2 class="form-header-title">Adicionar despesa</h2>
+      <div class="form-header-bar">
+        <h2 class="form-header-title">Adicionar despesa</h2>
+
+        <!-- BOTÃO PARA ACIONAR A CÂMERA DO CELULAR -->
+        <button type="button" class="btn-scan-receipt" onclick="triggerReceiptScan()" title="Fotografar comprovante ou cupom">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path>
+            <circle cx="12" cy="13" r="3"></circle>
+          </svg>
+          Escanear comprovante
+        </button>
+        <input type="file" id="receiptFileInput" accept="image/*" capture="environment" style="display: none;" onchange="handleReceiptUpload(event)">
+      </div>
 
       <form id="expenseForm" onsubmit="submitExpense(event)">
         <div class="field-row">
@@ -1393,6 +1474,39 @@
 
   </div>
 
+  <!-- MODAL DE PROCESSAMENTO DE COMPROVANTE (OCR) -->
+  <div class="modal-backdrop" id="scanModalBackdrop">
+    <div class="modal-window" role="dialog" aria-modal="true" aria-labelledby="scanModalTitle">
+      <div class="modal-header-row">
+        <h3 class="modal-heading" id="scanModalTitle">Leitura de comprovante</h3>
+        <button class="btn-icon" style="width: 36px; height: 36px;" onclick="cancelReceiptScan()" aria-label="Cancelar leitura">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <div class="scan-preview-box">
+        <img id="scanPreviewImg" class="scan-preview-img" alt="Comprovante escaneado">
+      </div>
+
+      <div style="display: flex; flex-direction: column; gap: 8px;">
+        <div style="display: flex; justify-content: space-between; align-items: center;">
+          <span class="field-label" id="scanProgressLabel">Inicializando leitor óptico...</span>
+          <span class="field-label tabular-num" id="scanProgressPercent">0%</span>
+        </div>
+        <div class="scan-progress-bar-bg" aria-hidden="true">
+          <div class="scan-progress-bar-fill" id="scanProgressBar"></div>
+        </div>
+      </div>
+
+      <p class="modal-text" style="font-size: 12px; color: var(--text-3);">
+        O reconhecimento é executado de forma 100% privada dentro deste aparelho sem transmissão de dados externos.
+      </p>
+    </div>
+  </div>
+
   <!-- MODAL DE GERENCIAMENTO DE CARTÕES -->
   <div class="modal-backdrop" id="cardModalBackdrop" onclick="closeCardModal(event)">
     <div class="modal-window" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="cardModalTitle">
@@ -1496,6 +1610,7 @@
     let cardsDB = [];
     let activeFilter = 'all';
     let currentBillingType = 'single';
+    let currentOcrWorker = null;
 
     const now = new Date();
     const systemYear = now.getFullYear();
@@ -1517,6 +1632,13 @@
 
     function formatBRL(value) {
       return currencyFormatter.format(value || 0);
+    }
+
+    function formatBRLValueInput(floatVal) {
+      const fixed = floatVal.toFixed(2);
+      const parts = fixed.split('.');
+      parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+      return parts.join(',');
     }
 
     /* INICIALIZAÇÃO */
@@ -1686,6 +1808,175 @@
       document.getElementById('cardModalBackdrop').classList.remove('active');
     }
 
+    /* ESCANEAMENTO E LEITURA DE COMPROVANTES (OCR MÉTODO 1) */
+    function triggerReceiptScan() {
+      document.getElementById('receiptFileInput').click();
+    }
+
+    function handleReceiptUpload(event) {
+      const file = event.target.files && event.target.files[0];
+      if (!file) return;
+
+      // Exibe pré-visualização e modal de leitura
+      const previewImg = document.getElementById('scanPreviewImg');
+      previewImg.src = URL.createObjectURL(file);
+
+      const modal = document.getElementById('scanModalBackdrop');
+      modal.classList.add('active');
+
+      updateScanProgress(0, 'Carregando motor óptico...');
+      processReceiptWithTesseract(file);
+    }
+
+    function updateScanProgress(percent, statusText) {
+      document.getElementById('scanProgressBar').style.width = `${percent}%`;
+      document.getElementById('scanProgressPercent').textContent = `${percent}%`;
+      if (statusText) {
+        document.getElementById('scanProgressLabel').textContent = statusText;
+      }
+    }
+
+    async function processReceiptWithTesseract(file) {
+      try {
+        if (typeof Tesseract === 'undefined') {
+          throw new Error('Módulo OCR não disponível offline');
+        }
+
+        updateScanProgress(15, 'Inicializando inteligência óptica...');
+
+        currentOcrWorker = await Tesseract.createWorker('por', 1, {
+          logger: progress => {
+            if (progress.status === 'recognizing text') {
+              const pct = Math.min(95, Math.round(20 + (progress.progress * 75)));
+              updateScanProgress(pct, `Identificando caracteres (${pct}%)...`);
+            }
+          }
+        });
+
+        const recognition = await currentOcrWorker.recognize(file);
+        const text = recognition && recognition.data ? recognition.data.text : '';
+
+        await currentOcrWorker.terminate();
+        currentOcrWorker = null;
+
+        updateScanProgress(100, 'Processamento concluído');
+
+        setTimeout(() => {
+          document.getElementById('scanModalBackdrop').classList.remove('active');
+          document.getElementById('receiptFileInput').value = '';
+
+          const extracted = parseReceiptText(text);
+
+          if (extracted.amount || extracted.title) {
+            if (extracted.title) {
+              document.getElementById('expenseTitle').value = extracted.title;
+            }
+            if (extracted.amount) {
+              document.getElementById('expenseAmount').value = formatBRLValueInput(extracted.amount);
+            }
+            if (extracted.day) {
+              document.getElementById('expenseDueDay').value = extracted.day;
+            }
+
+            showToast('Dados extraídos do comprovante');
+            document.getElementById('expenseAmount').focus();
+          } else {
+            showToast('Não foi possível identificar valores no comprovante');
+          }
+        }, 400);
+
+      } catch (err) {
+        console.error('Erro na leitura óptica:', err);
+        updateScanProgress(0, 'Falha no processamento');
+        setTimeout(() => {
+          document.getElementById('scanModalBackdrop').classList.remove('active');
+          document.getElementById('receiptFileInput').value = '';
+          showToast('Falha ao processar imagem do comprovante');
+        }, 1200);
+      }
+    }
+
+    function cancelReceiptScan() {
+      if (currentOcrWorker) {
+        currentOcrWorker.terminate();
+        currentOcrWorker = null;
+      }
+      document.getElementById('scanModalBackdrop').classList.remove('active');
+      document.getElementById('receiptFileInput').value = '';
+    }
+
+    /* PARSER INTELIGENTE DE TEXTO DO COMPROVANTE */
+    function parseReceiptText(rawText) {
+      if (!rawText) return { amount: null, title: '', day: null };
+
+      const lines = rawText.split('\n')
+        .map(l => l.trim())
+        .filter(l => l.length > 0);
+
+      let foundAmount = null;
+      let foundTitle = '';
+      let foundDay = null;
+
+      // 1. Procura por linhas prioritárias de total
+      const totalKeywords = /(?:total|valor|liquido|subtotal|pago|debito|credito|pagamento|a pagar)/i;
+
+      for (const line of lines) {
+        if (totalKeywords.test(line)) {
+          const match = line.match(/(?:R\$\s*)?(\d{1,5}[.,]\d{2})/i);
+          if (match) {
+            const num = parseFloat(match[1].replace(/\./g, '').replace(',', '.'));
+            if (num > 0) {
+              foundAmount = num;
+              break;
+            }
+          }
+        }
+      }
+
+      // Prioridade 2: Maior valor monetário identificado se não encontrou linha de total
+      if (!foundAmount) {
+        let maxVal = 0;
+        for (const line of lines) {
+          const matches = line.matchAll(/(?:R\$\s*)?(\d{1,5}[.,]\d{2})/gi);
+          for (const m of matches) {
+            const num = parseFloat(m[1].replace(/\./g, '').replace(',', '.'));
+            if (num > maxVal && num < 100000) {
+              maxVal = num;
+            }
+          }
+        }
+        if (maxVal > 0) foundAmount = maxVal;
+      }
+
+      // 2. Extração do nome do estabelecimento (geralmente nas primeiras 5 linhas úteis)
+      const ignoreWords = /(?:cnpj|cpf|comprovante|cupom|fiscal|via|autentic|data|hora|extrato|recibo|banco|transacao|terminal|documento|operacao)/i;
+      for (let i = 0; i < Math.min(lines.length, 6); i++) {
+        const line = lines[i];
+        if (line.length >= 3 && /[a-zA-Z]{3,}/.test(line) && !ignoreWords.test(line)) {
+          const cleaned = line.replace(/[^a-zA-Z0-9\sÀ-ÿ]/g, '').trim();
+          if (cleaned.length >= 3) {
+            foundTitle = cleaned;
+            break;
+          }
+        }
+      }
+
+      // 3. Procura por data (dia do mês)
+      const dateMatch = rawText.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
+      if (dateMatch) {
+        const dayNum = parseInt(dateMatch[1], 10);
+        if (dayNum >= 1 && dayNum <= 31) {
+          foundDay = dayNum;
+        }
+      }
+
+      return {
+        amount: foundAmount,
+        title: foundTitle,
+        day: foundDay
+      };
+    }
+
     /* BASE DE DADOS */
     function loadDatabase() {
       try {
@@ -1768,7 +2059,6 @@
       if (current < 1) current = 1;
       if (total < 1) total = 1;
 
-      // Atualiza o estado visual ativo dos botões de atalho
       document.querySelectorAll('.quick-chip-btn').forEach(btn => {
         const val = parseInt(btn.getAttribute('data-val'), 10);
         btn.classList.toggle('active', val === total);
@@ -2094,7 +2384,7 @@
           <div class="empty-state">
             <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
               <rect width="20" height="14" x="2" y="5" rx="2"></rect>
-              <line x1="2" x2="22" y1="10" y2="10"></line>
+              <line x1="2" y1="10" x2="22" y1="10"></line>
             </svg>
             <h3 class="empty-title">Sem registros no período</h3>
             <p class="empty-desc">${msg}</p>
