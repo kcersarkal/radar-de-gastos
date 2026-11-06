@@ -1304,7 +1304,7 @@
       <div class="form-header-bar">
         <h2 class="form-header-title">Adicionar despesa</h2>
 
-        <!-- BOTÃO PARA ACIONAR A CÂMERA DO CELULAR -->
+        <!-- BOTÃO PARA ACIONAR A CÂMERA DO CELULAR OU GALERIA -->
         <button type="button" class="btn-scan-receipt" onclick="triggerReceiptScan()" title="Fotografar comprovante ou cupom">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z"></path>
@@ -1312,7 +1312,7 @@
           </svg>
           Escanear comprovante
         </button>
-        <input type="file" id="receiptFileInput" accept="image/*" capture="environment" style="display: none;" onchange="handleReceiptUpload(event)">
+        <input type="file" id="receiptFileInput" accept="image/*" style="display: none;" onchange="handleReceiptUpload(event)">
       </div>
 
       <form id="expenseForm" onsubmit="submitExpense(event)">
@@ -2018,10 +2018,10 @@ Retorne estritamente um JSON no formato:
       currentOcrWorker = null;
 
       const extracted = parseReceiptText(text);
-      applyExtractedData(extracted.title, extracted.amount, extracted.day);
+      applyExtractedData(extracted.title, extracted.amount, extracted.day, text);
     }
 
-    function applyExtractedData(title, amount, day) {
+    function applyExtractedData(title, amount, day, rawText) {
       updateScanProgress(100, 'Concluído');
 
       setTimeout(() => {
@@ -2033,7 +2033,25 @@ Retorne estritamente um JSON no formato:
           if (amount) document.getElementById('expenseAmount').value = formatBRLValueInput(amount);
           if (day) document.getElementById('expenseDueDay').value = day;
 
+          // Se identificou menção a algum cartão cadastrado no comprovante, seleciona automaticamente
+          if (cardsDB && cardsDB.length > 0 && rawText) {
+            const lower = rawText.toLowerCase();
+            for (const card of cardsDB) {
+              const nick = (card.nickname || '').toLowerCase();
+              const iss = (card.issuer || '').toLowerCase();
+              if ((nick.length >= 3 && lower.includes(nick)) || (iss.length >= 3 && lower.includes(iss))) {
+                document.getElementById('expenseCardId').value = card.id;
+                break;
+              }
+            }
+          }
+
           showToast('Dados do comprovante preenchidos');
+          
+          const formCard = document.querySelector('.form-card');
+          if (formCard) {
+            formCard.scrollIntoView({ behavior: 'smooth', block: 'start' });
+          }
           document.getElementById('expenseAmount').focus();
         } else {
           showToast('Não foi possível identificar valores neste comprovante');
@@ -2050,7 +2068,31 @@ Retorne estritamente um JSON no formato:
       document.getElementById('receiptFileInput').value = '';
     }
 
-    /* PARSER AVANÇADO DE TEXTO PARA COMPROVANTES TÉRMICOS */
+    /* LIMPEZA E FORMATAÇÃO DE ESTABELECIMENTO */
+    function cleanMerchantName(str) {
+      if (!str) return '';
+      let clean = str
+        .replace(/^(?:destinat[aá]rio|benefici[aá]rio|favorecido|pagador|empresa|loja|estabelecimento)\s*[:\.]?\s*/i, '')
+        .replace(/\b\d{7,18}\b/g, '')
+        .replace(/\b\d{2,3}[\.\/]?\d{3}[\.\/]?\d{3}[-\/]?\d{2,4}[-\/]?\d{2}\b/g, '')
+        .replace(/[^a-zA-Z0-9\sÀ-ÿ]/g, ' ')
+        .replace(/\b(via|estabelecimento|cliente|consumidor|comprovante|cupom|operacao|debito|credito|aprovado|autorizado|terminal|serie|instituicao|chave)\b/gi, '')
+        .replace(/\s+/g, ' ')
+        .trim();
+
+      if (/^IF\s+(CARNES|MERCADO|BURGER|AUTO)/i.test(clean)) {
+        clean = clean.replace(/^IF/i, 'JF');
+      }
+
+      const lowerWords = new Set(['de', 'da', 'do', 'das', 'dos', 'e', 'em']);
+      return clean.split(/\s+/).map((word, idx) => {
+        if (word.length <= 2 && idx === 0 && !lowerWords.has(word.toLowerCase())) return word.toUpperCase();
+        if (lowerWords.has(word.toLowerCase()) && idx > 0) return word.toLowerCase();
+        return word.charAt(0).toUpperCase() + word.slice(1).toLowerCase();
+      }).join(' ').trim();
+    }
+
+    /* PARSER AVANÇADO DE TEXTO PARA COMPROVANTES E NOTAS */
     function parseReceiptText(rawText) {
       if (!rawText) return { amount: null, title: '', day: null };
 
@@ -2059,64 +2101,117 @@ Retorne estritamente um JSON no formato:
         .filter(l => l.length > 0);
 
       let foundAmount = null;
-      let foundTitle = '';
-      let foundDay = null;
 
-      // 1. Procura linhas com indicadores de valor
-      const totalKeywords = /(?:total|valor|liquido|subtotal|pago|debito|credito|pagamento|a pagar)/i;
-
-      for (const line of lines) {
-        if (totalKeywords.test(line)) {
-          const match = line.match(/(?:R\$\s*)?(\d{1,5}[.,]\d{2})/i);
+      // 1. EXTRAÇÃO DE VALOR (prioridade para linhas com Total/Valor)
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        if (/(?:total|valor|pago|debito|credito|liquido|subtotal)/i.test(line)) {
+          const match = line.match(/(?:R\$\s*)?(\d{1,5}(?:\s*[.,:]\s*\d{2})?)/i);
           if (match) {
-            const num = parseFloat(match[1].replace(/\./g, '').replace(',', '.'));
-            if (num > 0) {
-              foundAmount = num;
-              break;
+            let numStr = match[1].replace(/\s+/g, '').replace(':', ',');
+            if (numStr.includes(',') || numStr.includes('.')) {
+              const val = parseFloat(numStr.replace(/\./g, '').replace(',', '.'));
+              if (val > 0) {
+                foundAmount = val;
+                break;
+              }
+            }
+          }
+          if (!foundAmount && i + 1 < lines.length) {
+            const nextLine = lines[i + 1];
+            const nextMatch = nextLine.match(/(?:R\$\s*)?(\d{1,5}(?:\s*[.,:]\s*\d{2}))/i);
+            if (nextMatch) {
+              let numStr = nextMatch[1].replace(/\s+/g, '').replace(':', ',');
+              const val = parseFloat(numStr.replace(/\./g, '').replace(',', '.'));
+              if (val > 0) {
+                foundAmount = val;
+                break;
+              }
             }
           }
         }
       }
 
+      // Fallback para o maior valor monetário identificado
       if (!foundAmount) {
         let maxVal = 0;
         for (const line of lines) {
-          const matches = line.matchAll(/(?:R\$\s*)?(\d{1,5}[.,]\d{2})/gi);
+          const matches = line.matchAll(/(?:R\$\s*)?(\d{1,5}(?:\s*[.,:]\s*\d{2}))/gi);
           for (const m of matches) {
-            const num = parseFloat(m[1].replace(/\./g, '').replace(',', '.'));
-            if (num > maxVal && num < 100000) {
-              maxVal = num;
+            let numStr = m[1].replace(/\s+/g, '').replace(':', ',');
+            const val = parseFloat(numStr.replace(/\./g, '').replace(',', '.'));
+            if (val > maxVal && val < 100000) {
+              maxVal = val;
             }
           }
         }
         if (maxVal > 0) foundAmount = maxVal;
       }
 
-      // 2. Extração de estabelecimento (analisa todas as linhas em busca do nome da loja)
-      const ignoreWords = /(?:cnpj|cpf|comprovante|cupom|fiscal|via|autentic|data|hora|extrato|recibo|banco|transacao|terminal|documento|operacao|aprovado|mastercard|visa|elo|aid|nfc|mercadopago|mercado pago)/i;
-      
-      for (const line of lines) {
-        if (line.length >= 3 && /[a-zA-Z]{3,}/.test(line) && !ignoreWords.test(line)) {
-          const clean = line.replace(/[^a-zA-Z0-9\sÀ-ÿ]/g, '').trim();
-          if (clean.length >= 3 && clean.length <= 40) {
-            foundTitle = clean;
-            break;
-          }
-        }
+      // 2. EXTRAÇÃO DE DATA (VENCIMENTO OU COMPRA)
+      let foundDay = null;
+      const dateMatch = rawText.match(/(?:data|vencimento|dia)?\s*[:\.]?\s*(\d{1,2})[\/\-\.](\d{1,2}|\w{3})[\/\-\.](\d{2,4})/i) ||
+                        rawText.match(/\b(\d{1,2})\s+(?:de\s+)?(jan|fev|mar|abr|mai|jun|jul|ago|set|out|nov|dez)\b/i) ||
+                        rawText.match(/\bdia\s+(\d{1,2})\b/i);
+
+      if (dateMatch) {
+        const day = parseInt(dateMatch[1], 10);
+        if (day >= 1 && day <= 31) foundDay = day;
       }
 
-      // 3. Procura por data
-      const dateMatch = rawText.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
-      if (dateMatch) {
-        const dayNum = parseInt(dateMatch[1], 10);
-        if (dayNum >= 1 && dayNum <= 31) {
-          foundDay = dayNum;
+      // 3. EXTRAÇÃO DE ESTABELECIMENTO COM SCORING INTELIGENTE
+      const blacklistRegex = /(?:via|estabelecimento|csiamecivorto|operacao|pusacao|transacao|debito|credito|mastercard|visa|elo|amex|hipercard|asterca|aprovado|etapaovado|recusado|autoriz|terminal|serie|pos|nfc|aid|mercadopago|mercado\s*pago|pagseguro|stone|cielo|rede|getnet|safrapay|comprovante|cupom|fiscal|extrato|documento|banco|agencia|conta|cartao|titular|senha|lote|hora|data|rua\b|av\b|avenida|alameda|rodovia|bairro\b|instituicao|autenticacao|chave|pix)/i;
+
+      const commercialBoostRegex = /(?:carnes|mercado|supermercado|padaria|panificadora|acougue|farmacia|drogaria|posto|combustivel|restaurante|bar|lanchonete|burger|pizzaria|pao|boutique|calcados|roupas|loja|distribuidora|comercio|hortifruti|conveniencia|cafe|otica|papelaria|materiais|auto|pecas|mecanica|lavajato|energia|energisa|deso|claro|vivo|tim|oi|internet|droga)/i;
+
+      let bestTitle = '';
+      let bestScore = -999;
+
+      for (const line of lines) {
+        const lettersOnly = line.replace(/[^a-zA-ZÀ-ÿ]/g, '');
+        if (lettersOnly.length < 3) continue;
+
+        if (/^\d{1,2}[\/\-\.]\d{1,2}/.test(line) || /^(total|valor|r\$)\b/i.test(line)) continue;
+
+        const symbolCount = (line.match(/[^a-zA-Z0-9\sÀ-ÿ]/g) || []).length;
+        if (symbolCount > 4 || (symbolCount / line.length) > 0.3) continue;
+
+        let score = 0;
+
+        if (blacklistRegex.test(line)) {
+          score -= 60;
+        }
+
+        if (commercialBoostRegex.test(line)) {
+          score += 50;
+        }
+
+        if (/\b\d{11,14}\b/.test(line)) {
+          score += 40;
+        }
+
+        if (/destinat[aá]rio/i.test(line)) {
+          score += 60;
+        }
+
+        const clean = cleanMerchantName(line);
+        if (clean.length >= 4 && clean.length <= 40) {
+          score += 20;
+        }
+
+        if (/^[A-Z0-9\sÀ-ÿ]+$/.test(line)) {
+          score += 10;
+        }
+
+        if (score > bestScore && clean.length >= 3) {
+          bestScore = score;
+          bestTitle = clean;
         }
       }
 
       return {
         amount: foundAmount,
-        title: foundTitle,
+        title: bestTitle,
         day: foundDay
       };
     }
