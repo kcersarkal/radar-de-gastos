@@ -1,0 +1,2241 @@
+<!DOCTYPE html>
+<html lang="pt-BR" data-theme="light">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="theme-color" content="#F7F8FA" id="metaThemeColor">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="default">
+  <meta name="apple-mobile-web-app-title" content="Radar Financeiro">
+  <title>Gestão de Despesas</title>
+  
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+
+  <style>
+    /* DESIGN TOKENS - TEMA CLARO */
+    :root {
+      --bg: #F7F8FA;
+      --surface: #FFFFFF;
+      --surface-2: #F0F2F5;
+      --border: #E4E7EC;
+      --border-hover: #D0D5DD;
+      --text: #101828;
+      --text-2: #475467;
+      --text-3: #98A2B3;
+
+      --accent: #0F3D3E;        /* verde petróleo profundo: marca */
+      --accent-hover: #0B2F30;
+      --accent-soft: #E6F0F0;
+      --accent-text: #FFFFFF;
+
+      --positive: #067647;      /* receita / sucesso */
+      --positive-soft: #ECFDF3;
+      --negative: #B42318;      /* despesa / erro */
+      --negative-soft: #FEF3F2;
+      --warning: #B54708;
+      --warning-soft: #FFFAEB;
+
+      /* Sombras estritas (máximo 2 níveis) */
+      --shadow-card: 0 1px 2px rgba(16, 24, 40, 0.06);
+      --shadow-modal: 0 12px 32px rgba(16, 24, 40, 0.12);
+
+      --ease: cubic-bezier(0.2, 0, 0, 1);
+      --radius-sm: 8px;
+      --radius-card: 12px;
+      --radius-modal: 16px;
+      --radius-badge: 6px;
+    }
+
+    /* DESIGN TOKENS - TEMA ESCURO */
+    [data-theme="dark"] {
+      --bg: #0B0F14;
+      --surface: #121821;
+      --surface-2: #1A222D;
+      --border: #243040;
+      --border-hover: #344256;
+      --text: #F2F4F7;
+      --text-2: #A6B0BF;
+      --text-3: #6B7686;
+
+      --accent: #4FD1C5;
+      --accent-hover: #38B2AC;
+      --accent-soft: #12302F;
+      --accent-text: #0B0F14;   /* alto contraste WCAG AA sobre #4FD1C5 */
+
+      --positive: #12B76A;
+      --positive-soft: #053321;
+      --negative: #F04438;
+      --negative-soft: #381211;
+      --warning: #F79009;
+      --warning-soft: #3D2205;
+
+      --shadow-card: 0 1px 2px rgba(0, 0, 0, 0.4);
+      --shadow-modal: 0 12px 32px rgba(0, 0, 0, 0.6);
+    }
+
+    /* RESET E BASE */
+    *, *::before, *::after {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      -webkit-tap-highlight-color: transparent;
+      transition: background-color 200ms var(--ease),
+                  border-color 200ms var(--ease),
+                  color 200ms var(--ease);
+    }
+
+    /* ELIMINAÇÃO DAS SETAS GENÉRICAS NATIVAS DE NAVEGADORES */
+    input[type="number"]::-webkit-inner-spin-button,
+    input[type="number"]::-webkit-outer-spin-button {
+      -webkit-appearance: none;
+      margin: 0;
+    }
+
+    input[type="number"] {
+      -moz-appearance: textfield;
+      appearance: textfield;
+    }
+
+    body {
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background-color: var(--bg);
+      color: var(--text);
+      font-size: 14px;
+      line-height: 1.5;
+      font-weight: 400;
+      min-height: 100vh;
+      display: flex;
+      justify-content: center;
+      padding: 32px 16px 80px 16px;
+      padding-bottom: calc(80px + env(safe-area-inset-bottom, 0px));
+      overflow-x: hidden;
+    }
+
+    .app-shell {
+      width: 100%;
+      max-width: 600px;
+      display: flex;
+      flex-direction: column;
+      gap: 32px;
+      animation: shellFade 200ms var(--ease);
+    }
+
+    @keyframes shellFade {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+
+    /* NÚMEROS TABULARES */
+    .tabular-num {
+      font-variant-numeric: tabular-nums;
+    }
+
+    /* TOP BAR / CABEÇALHO */
+    .topbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .topbar-brand {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .topbar-title {
+      font-size: 20px;
+      font-weight: 600;
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+      color: var(--text);
+    }
+
+    .topbar-subtitle {
+      font-size: 12px;
+      color: var(--text-3);
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      font-weight: 500;
+    }
+
+    .topbar-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    /* BOTÕES BASE */
+    .btn-icon {
+      width: 44px;
+      height: 44px;
+      border-radius: var(--radius-sm);
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text-2);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: var(--shadow-card);
+    }
+
+    .btn-icon:hover {
+      background-color: var(--surface-2);
+      color: var(--text);
+    }
+
+    .btn-icon:focus-visible {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .btn-primary {
+      height: 44px;
+      border-radius: var(--radius-sm);
+      background-color: var(--accent);
+      color: var(--accent-text);
+      border: none;
+      font-size: 14px;
+      font-weight: 500;
+      font-family: inherit;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      padding: 0 20px;
+      width: 100%;
+    }
+
+    .btn-primary:hover {
+      background-color: var(--accent-hover);
+    }
+
+    .btn-primary:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .btn-secondary {
+      height: 44px;
+      border-radius: var(--radius-sm);
+      background-color: transparent;
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 14px;
+      font-weight: 500;
+      font-family: inherit;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      cursor: pointer;
+      padding: 0 16px;
+    }
+
+    .btn-secondary:hover {
+      background-color: var(--surface-2);
+    }
+
+    .btn-secondary:focus-visible {
+      outline: none;
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .btn-text {
+      background: none;
+      border: none;
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      padding: 4px 6px;
+      border-radius: 4px;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+    }
+
+    .btn-text:hover {
+      background-color: var(--accent-soft);
+    }
+
+    /* SELETOR DE PERÍODO / NAVEGADOR DE MÊS */
+    .period-navigator {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      padding: 8px 12px;
+      box-shadow: var(--shadow-card);
+    }
+
+    .period-arrow {
+      width: 36px;
+      height: 36px;
+      border-radius: var(--radius-sm);
+      background: transparent;
+      border: none;
+      color: var(--text-2);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .period-arrow:hover {
+      background-color: var(--surface-2);
+      color: var(--text);
+    }
+
+    .period-arrow:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .period-info {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .period-label {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      text-transform: capitalize;
+    }
+
+    .period-today-btn {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--accent);
+      background-color: var(--accent-soft);
+      border: none;
+      border-radius: 4px;
+      padding: 2px 8px;
+      cursor: pointer;
+      display: none;
+    }
+
+    .period-today-btn.visible {
+      display: inline-block;
+    }
+
+    /* CARD PRINCIPAL (RESUMO FINANCEIRO) */
+    .summary-card {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      padding: 24px;
+      box-shadow: var(--shadow-card);
+      display: flex;
+      flex-direction: column;
+      gap: 20px;
+    }
+
+    .summary-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+    }
+
+    .summary-caption {
+      font-size: 12px;
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+      color: var(--text-3);
+    }
+
+    .summary-badge {
+      height: 24px;
+      padding: 0 8px;
+      border-radius: var(--radius-badge);
+      font-size: 12px;
+      font-weight: 500;
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      background-color: var(--surface-2);
+      color: var(--text-2);
+    }
+
+    .summary-main-value {
+      font-size: 36px;
+      font-weight: 600;
+      line-height: 1.2;
+      letter-spacing: -0.01em;
+      color: var(--text);
+    }
+
+    .summary-columns {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 16px;
+      padding-top: 16px;
+      border-top: 1px solid var(--border);
+    }
+
+    .summary-col {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+    }
+
+    .summary-col-label {
+      font-size: 12px;
+      color: var(--text-2);
+      font-weight: 500;
+    }
+
+    .summary-col-value {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .summary-col-value.negative {
+      color: var(--negative);
+    }
+
+    .summary-col-value.positive {
+      color: var(--positive);
+    }
+
+    .budget-track {
+      width: 100%;
+      height: 8px;
+      background-color: var(--surface-2);
+      border-radius: 999px;
+      overflow: hidden;
+    }
+
+    .budget-fill {
+      height: 100%;
+      background-color: var(--positive);
+      width: 0%;
+      border-radius: 999px;
+      transition: width 220ms var(--ease), background-color 220ms var(--ease);
+    }
+
+    /* CARD DE ADIÇÃO DE DESPESA */
+    .form-card {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      padding: 24px;
+      box-shadow: var(--shadow-card);
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .form-header-title {
+      font-size: 16px;
+      font-weight: 600;
+      line-height: 1.2;
+      color: var(--text);
+    }
+
+    .input-field-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .field-label-row {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .field-label {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-2);
+    }
+
+    .field-row {
+      display: grid;
+      grid-template-columns: 1fr 160px;
+      gap: 12px;
+    }
+
+    @media (max-width: 480px) {
+      .field-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .input-text {
+      height: 44px;
+      border: 1px solid var(--border);
+      background-color: var(--surface);
+      border-radius: var(--radius-sm);
+      padding: 0 14px;
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text);
+      outline: none;
+      width: 100%;
+    }
+
+    .input-text:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .currency-input-wrap {
+      position: relative;
+      display: flex;
+      align-items: center;
+    }
+
+    .currency-prefix {
+      position: absolute;
+      left: 14px;
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text-3);
+      pointer-events: none;
+    }
+
+    .input-text.with-prefix {
+      padding-left: 38px;
+    }
+
+    /* SELECT ELEGANTE CUSTOMIZADO (SEM SETA GENÉRICA DE SISTEMA) */
+    .select-input {
+      height: 44px;
+      border: 1px solid var(--border);
+      background-color: var(--surface);
+      border-radius: var(--radius-sm);
+      padding: 0 38px 0 14px;
+      font-size: 14px;
+      font-family: inherit;
+      color: var(--text);
+      outline: none;
+      width: 100%;
+      cursor: pointer;
+      appearance: none;
+      -webkit-appearance: none;
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23475467' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-repeat: no-repeat;
+      background-position: right 14px center;
+    }
+
+    [data-theme="dark"] .select-input {
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%23A6B0BF' stroke-width='1.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+    }
+
+    .select-input:focus {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    /* SELETOR DE MODALIDADE DE COBRANÇA */
+    .billing-type-group {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding-top: 4px;
+    }
+
+    .billing-options-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1fr;
+      gap: 8px;
+    }
+
+    @media (max-width: 480px) {
+      .billing-options-row {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    .billing-option-btn {
+      height: 40px;
+      border: 1px solid var(--border);
+      background-color: var(--surface-2);
+      border-radius: var(--radius-sm);
+      color: var(--text-2);
+      font-size: 13px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .billing-option-btn:hover {
+      background-color: var(--surface);
+      color: var(--text);
+    }
+
+    .billing-option-btn.active {
+      background-color: var(--surface);
+      color: var(--text);
+      border-color: var(--accent);
+      box-shadow: var(--shadow-card);
+      font-weight: 600;
+    }
+
+    /* PAINEL DE PARCELAS */
+    .installments-panel {
+      display: none;
+      background-color: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 16px;
+      flex-direction: column;
+      gap: 12px;
+      animation: shellFade 150ms var(--ease);
+    }
+
+    .installments-panel.active {
+      display: flex;
+    }
+
+    .installments-inputs-row {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .installment-input-box {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .installment-divider-label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-3);
+      padding-top: 22px;
+    }
+
+    /* CONTROLE STEPPER PROFISSIONAL (SUBSTITUI OS SPINNERS NATIVOS) */
+    .stepper-control {
+      height: 44px;
+      border: 1px solid var(--border);
+      background-color: var(--surface);
+      border-radius: var(--radius-sm);
+      display: flex;
+      align-items: center;
+      overflow: hidden;
+      transition: border-color 160ms var(--ease), box-shadow 160ms var(--ease);
+    }
+
+    .stepper-control:focus-within {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 3px var(--accent-soft);
+    }
+
+    .stepper-btn {
+      width: 40px;
+      height: 100%;
+      background: transparent;
+      border: none;
+      color: var(--text-2);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      flex-shrink: 0;
+      transition: background-color 150ms var(--ease), color 150ms var(--ease);
+    }
+
+    .stepper-btn:hover {
+      background-color: var(--surface-2);
+      color: var(--text);
+    }
+
+    .stepper-btn:active {
+      background-color: var(--border);
+    }
+
+    .stepper-btn:focus-visible {
+      outline: none;
+      background-color: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .stepper-input {
+      flex: 1;
+      width: 100%;
+      min-width: 0;
+      height: 100%;
+      border: none;
+      background: transparent;
+      text-align: center;
+      font-size: 15px;
+      font-weight: 600;
+      color: var(--text);
+      font-family: inherit;
+      outline: none;
+      padding: 0;
+    }
+
+    /* ATALHOS RÁPIDOS DE PARCELAS (CHIPS PRESET) */
+    .installment-quick-chips {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      flex-wrap: wrap;
+      padding-top: 2px;
+    }
+
+    .installment-chip-caption {
+      font-size: 11px;
+      color: var(--text-3);
+      font-weight: 500;
+      margin-right: 2px;
+    }
+
+    .quick-chip-btn {
+      height: 26px;
+      padding: 0 8px;
+      border-radius: 4px;
+      border: 1px solid var(--border);
+      background-color: var(--surface);
+      color: var(--text-2);
+      font-size: 11px;
+      font-weight: 500;
+      font-family: inherit;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      transition: all 150ms var(--ease);
+    }
+
+    .quick-chip-btn:hover {
+      background-color: var(--surface-2);
+      color: var(--text);
+    }
+
+    .quick-chip-btn.active {
+      background-color: var(--accent-soft);
+      color: var(--accent);
+      border-color: var(--accent);
+      font-weight: 600;
+    }
+
+    .installments-summary-hint {
+      font-size: 12px;
+      color: var(--text-2);
+      line-height: 1.4;
+      padding-top: 2px;
+    }
+
+    /* FILTROS SEGMENTADOS */
+    .segmented-control {
+      background-color: var(--surface-2);
+      border-radius: var(--radius-sm);
+      padding: 4px;
+      display: flex;
+      gap: 4px;
+      border: 1px solid var(--border);
+    }
+
+    .segmented-btn {
+      flex: 1;
+      height: 36px;
+      background: transparent;
+      border: none;
+      border-radius: 6px;
+      font-size: 13px;
+      font-weight: 500;
+      font-family: inherit;
+      color: var(--text-2);
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+    }
+
+    .segmented-btn:hover {
+      color: var(--text);
+    }
+
+    .segmented-btn.active {
+      background-color: var(--surface);
+      color: var(--text);
+      box-shadow: var(--shadow-card);
+    }
+
+    .segmented-count {
+      font-size: 11px;
+      padding: 1px 6px;
+      border-radius: 999px;
+      background-color: var(--surface-2);
+      color: var(--text-3);
+    }
+
+    .segmented-btn.active .segmented-count {
+      color: var(--text-2);
+    }
+
+    /* LISTA DE TRANSAÇÕES */
+    .transactions-card {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-card);
+      box-shadow: var(--shadow-card);
+      overflow: hidden;
+    }
+
+    .transaction-row {
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 16px;
+      gap: 12px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .transaction-row:last-child {
+      border-bottom: none;
+    }
+
+    .tx-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .tx-icon-box {
+      width: 40px;
+      height: 40px;
+      border-radius: 8px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      background-color: var(--accent-soft);
+      color: var(--accent);
+    }
+
+    .tx-icon-box.non-card {
+      background-color: var(--surface-2);
+      color: var(--text-2);
+    }
+
+    .tx-info {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+      min-width: 0;
+    }
+
+    .tx-title {
+      font-size: 14px;
+      font-weight: 500;
+      color: var(--text);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .transaction-row.paid .tx-title {
+      color: var(--text-3);
+      text-decoration: line-through;
+    }
+
+    .tx-meta {
+      display: flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      color: var(--text-2);
+    }
+
+    .tx-badge {
+      height: 18px;
+      padding: 0 6px;
+      border-radius: 4px;
+      font-size: 11px;
+      font-weight: 500;
+      background-color: var(--surface-2);
+      color: var(--text-2);
+      display: inline-flex;
+      align-items: center;
+    }
+
+    .tx-badge.card-issuer {
+      background-color: var(--accent-soft);
+      color: var(--accent);
+      font-weight: 600;
+    }
+
+    .tx-badge.installment {
+      background-color: var(--surface-2);
+      color: var(--text);
+      font-weight: 600;
+      border: 1px solid var(--border);
+    }
+
+    .tx-right {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-shrink: 0;
+    }
+
+    .tx-value {
+      font-size: 14px;
+      font-weight: 600;
+      color: var(--text);
+      text-align: right;
+    }
+
+    .transaction-row.paid .tx-value {
+      color: var(--text-3);
+    }
+
+    .btn-check-tx {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      border: 1px solid var(--border);
+      background-color: transparent;
+      color: var(--text-3);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .btn-check-tx:hover {
+      border-color: var(--positive);
+      color: var(--positive);
+      background-color: var(--positive-soft);
+    }
+
+    .transaction-row.paid .btn-check-tx {
+      background-color: var(--positive);
+      border-color: var(--positive);
+      color: #FFFFFF;
+    }
+
+    .btn-remove-tx {
+      width: 32px;
+      height: 32px;
+      border-radius: 6px;
+      border: none;
+      background: transparent;
+      color: var(--text-3);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+    }
+
+    .btn-remove-tx:hover {
+      background-color: var(--negative-soft);
+      color: var(--negative);
+    }
+
+    /* ESTADO VAZIO */
+    .empty-state {
+      padding: 48px 24px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      text-align: center;
+      gap: 12px;
+    }
+
+    .empty-icon {
+      width: 40px;
+      height: 40px;
+      color: var(--text-3);
+      margin-bottom: 4px;
+    }
+
+    .empty-title {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .empty-desc {
+      font-size: 14px;
+      color: var(--text-2);
+      max-width: 320px;
+    }
+
+    /* BARRA INFERIOR */
+    .footer-actions {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    /* MODAIS (REGRA 6: SOMBRA NÍVEL 2) */
+    .modal-backdrop {
+      position: fixed;
+      inset: 0;
+      background: rgba(16, 24, 40, 0.45);
+      backdrop-filter: blur(2px);
+      display: none;
+      align-items: center;
+      justify-content: center;
+      padding: 16px;
+      z-index: 1000;
+    }
+
+    .modal-backdrop.active {
+      display: flex;
+    }
+
+    .modal-window {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-modal);
+      width: 100%;
+      max-width: 480px;
+      padding: 24px;
+      box-shadow: var(--shadow-modal);
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+
+    .modal-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .modal-heading {
+      font-size: 16px;
+      font-weight: 600;
+      color: var(--text);
+      line-height: 1.2;
+    }
+
+    .modal-text {
+      font-size: 14px;
+      color: var(--text-2);
+      line-height: 1.5;
+    }
+
+    .modal-btn-row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+
+    /* LISTA DE CARTÕES NO MODAL */
+    .cards-list-box {
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      max-height: 200px;
+      overflow-y: auto;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 8px;
+      background-color: var(--surface-2);
+    }
+
+    .card-item-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 8px 12px;
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+    }
+
+    .card-item-details {
+      display: flex;
+      flex-direction: column;
+      gap: 2px;
+    }
+
+    .card-item-name {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+    }
+
+    .card-item-issuer {
+      font-size: 11px;
+      font-weight: 600;
+      color: var(--accent);
+    }
+
+    /* TOAST DISCRETO (REGRA 10: SUCESSO / ERRO) */
+    .toast-container {
+      position: fixed;
+      bottom: 24px;
+      right: 24px;
+      z-index: 2000;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      pointer-events: none;
+    }
+
+    .toast-card {
+      background-color: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-sm);
+      padding: 12px 16px;
+      box-shadow: var(--shadow-modal);
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text);
+      display: inline-flex;
+      align-items: center;
+      gap: 10px;
+      animation: toastIn 180ms var(--ease);
+      pointer-events: auto;
+    }
+
+    @keyframes toastIn {
+      from {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+      to {
+        opacity: 1;
+        transform: translateY(0);
+      }
+    }
+  </style>
+</head>
+<body>
+
+  <div class="app-shell">
+
+    <!-- CABEÇALHO SÓBRIO -->
+    <header class="topbar">
+      <div class="topbar-brand">
+        <h1 class="topbar-title">Gestão de Despesas</h1>
+        <span class="topbar-subtitle">Controle Mensal</span>
+      </div>
+
+      <div class="topbar-actions">
+        <!-- GERENCIADOR DE CARTÕES -->
+        <button class="btn-icon" onclick="openCardModal()" aria-label="Gerenciar cartões" title="Gerenciar cartões">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <rect width="20" height="14" x="2" y="5" rx="2"></rect>
+            <line x1="2" x2="22" y1="10" y2="10"></line>
+          </svg>
+        </button>
+
+        <!-- ALTERNAR TEMA CLARO / ESCURO -->
+        <button class="btn-icon" onclick="toggleTheme()" id="themeBtn" aria-label="Alternar tema" title="Alternar tema claro/escuro">
+          <!-- Ícone Sol -->
+          <svg id="iconSun" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="display: none;">
+            <circle cx="12" cy="12" r="4"></circle>
+            <path d="M12 2v2"></path>
+            <path d="M12 20v2"></path>
+            <path d="m4.93 4.93 1.41 1.41"></path>
+            <path d="m17.66 17.66 1.41 1.41"></path>
+            <path d="M2 12h2"></path>
+            <path d="M20 12h2"></path>
+            <path d="m6.34 17.66-1.41 1.41"></path>
+            <path d="m19.07 4.93-1.41 1.41"></path>
+          </svg>
+          <!-- Ícone Lua -->
+          <svg id="iconMoon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 3a6 6 0 0 0 9 9 9 9 0 1 1-9-9Z"></path>
+          </svg>
+        </button>
+
+        <!-- CONFIGURAÇÕES / BACKUP -->
+        <button class="btn-icon" onclick="openBackupModal()" aria-label="Opções e cópia de segurança" title="Cópia de segurança">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12.22 2h-.44a2 2 0 0 0-2 2v.18a2 2 0 0 1-1 1.73l-.43.25a2 2 0 0 1-2 0l-.15-.08a2 2 0 0 0-2.73.73l-.22.38a2 2 0 0 0 .73 2.73l.15.1a2 2 0 0 1 1 1.72v.51a2 2 0 0 1-1 1.74l-.15.09a2 2 0 0 0-.73 2.73l.22.38a2 2 0 0 0 2.73.73l.15-.08a2 2 0 0 1 2 0l.43.25a2 2 0 0 1 1 1.73V20a2 2 0 0 0 2 2h.44a2 2 0 0 0 2-2v-.18a2 2 0 0 1 1-1.73l.43-.25a2 2 0 0 1 2 0l.15.08a2 2 0 0 0 2.73-.73l.22-.39a2 2 0 0 0-.73-2.73l-.15-.08a2 2 0 0 1-1-1.74v-.5a2 2 0 0 1 1-1.74l.15-.09a2 2 0 0 0 .73-2.73l-.22-.38a2 2 0 0 0-2.73-.73l-.15.08a2 2 0 0 1-2 0l-.43-.25a2 2 0 0 1-1-1.73V4a2 2 0 0 0-2-2z"></path>
+            <circle cx="12" cy="12" r="3"></circle>
+          </svg>
+        </button>
+      </div>
+    </header>
+
+    <!-- NAVEGAÇÃO DE PERÍODO -->
+    <nav class="period-navigator" aria-label="Navegação por mês">
+      <button class="period-arrow" onclick="shiftMonth(-1)" aria-label="Mês anterior">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m15 18-6-6 6-6"></path>
+        </svg>
+      </button>
+
+      <div class="period-info">
+        <span class="period-label" id="currentPeriodDisplay">--</span>
+        <button class="period-today-btn" id="todayBtn" onclick="jumpToCurrentMonth()">Mês atual</button>
+      </div>
+
+      <button class="period-arrow" onclick="shiftMonth(1)" aria-label="Próximo mês">
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="m9 18 6-6-6-6"></path>
+        </svg>
+      </button>
+    </nav>
+
+    <!-- CARD PRINCIPAL (RESUMO FINANCEIRO) -->
+    <section class="summary-card" aria-label="Resumo do período">
+      <div class="summary-header">
+        <span class="summary-caption">Total de Despesas do Mês</span>
+        <span class="summary-badge tabular-num" id="paidPercentageBadge">0% liquidado</span>
+      </div>
+
+      <div class="summary-main-value tabular-num" id="totalMonthValue">R$ 0,00</div>
+
+      <div class="summary-columns">
+        <div class="summary-col">
+          <span class="summary-col-label">Pendente de pagamento</span>
+          <span class="summary-col-value negative tabular-num" id="pendingValue">− R$ 0,00</span>
+        </div>
+        <div class="summary-col">
+          <span class="summary-col-label">Total já liquidado</span>
+          <span class="summary-col-value positive tabular-num" id="paidValue">R$ 0,00</span>
+        </div>
+      </div>
+
+      <div class="budget-track" aria-hidden="true">
+        <div class="budget-fill" id="budgetProgress"></div>
+      </div>
+    </section>
+
+    <!-- FORMULÁRIO DE ADIÇÃO (APENAS 1 BOTÃO PRIMÁRIO NA TELA) -->
+    <section class="form-card" aria-label="Formulário de inclusão de despesa">
+      <h2 class="form-header-title">Adicionar despesa</h2>
+
+      <form id="expenseForm" onsubmit="submitExpense(event)">
+        <div class="field-row">
+          <div class="input-field-group">
+            <label class="field-label" for="expenseTitle">Descrição da conta</label>
+            <input type="text" id="expenseTitle" class="input-text" placeholder="Exemplo: Compra no Shopping, Mercado, Farmácia" required autocomplete="off">
+          </div>
+
+          <div class="input-field-group">
+            <label class="field-label" for="expenseAmount" id="amountLabel">Valor da parcela</label>
+            <div class="currency-input-wrap">
+              <span class="currency-prefix">R$</span>
+              <input type="text" id="expenseAmount" class="input-text with-prefix tabular-num" placeholder="0,00" required inputmode="decimal">
+            </div>
+          </div>
+        </div>
+
+        <div class="field-row" style="margin-top: 12px;">
+          <!-- SELETOR DE CARTÕES -->
+          <div class="input-field-group">
+            <div class="field-label-row">
+              <label class="field-label" for="expenseCard">Cartão utilizado</label>
+              <button type="button" class="btn-text" onclick="openCardModal()">+ Novo cartão</button>
+            </div>
+            <select id="expenseCard" class="select-input">
+              <!-- Preenchido dinamicamente via JS -->
+            </select>
+          </div>
+
+          <div class="input-field-group">
+            <label class="field-label" for="expenseDueDay">Dia de vencimento</label>
+            <input type="number" id="expenseDueDay" class="input-text tabular-num" placeholder="Exemplo: 10" min="1" max="31">
+          </div>
+        </div>
+
+        <!-- SELEÇÃO DA NATUREZA DA DESPESA -->
+        <div class="billing-type-group" style="margin-top: 12px;">
+          <label class="field-label">Tipo de despesa</label>
+          <div class="billing-options-row">
+            <button type="button" class="billing-option-btn active" id="btnTypeSingle" onclick="selectBillingType('single')">
+              Pontual (mês atual)
+            </button>
+            <button type="button" class="billing-option-btn" id="btnTypeRecurring" onclick="selectBillingType('recurring')">
+              Fixa mensal
+            </button>
+            <button type="button" class="billing-option-btn" id="btnTypeInstallments" onclick="selectBillingType('installments')">
+              Parcelada no cartão
+            </button>
+          </div>
+        </div>
+
+        <!-- PAINEL DINÂMICO DE PARCELAS COM CONTROLES STEPPER MODERNOS -->
+        <div class="installments-panel" id="installmentsPanel">
+          <div class="installments-inputs-row">
+            <!-- PARCELA ATUAL -->
+            <div class="installment-input-box">
+              <label class="field-label" for="currentInstallment">Parcela atual</label>
+              <div class="stepper-control">
+                <button type="button" class="stepper-btn" onclick="stepValue('currentInstallment', -1)" aria-label="Diminuir parcela atual" title="Diminuir">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 12h14"></path>
+                  </svg>
+                </button>
+                <input type="number" id="currentInstallment" class="stepper-input tabular-num" value="1" min="1" max="120" oninput="updateInstallmentHint()">
+                <button type="button" class="stepper-btn" onclick="stepValue('currentInstallment', 1)" aria-label="Aumentar parcela atual" title="Aumentar">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 12h14"></path>
+                    <path d="M12 5v14"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <span class="installment-divider-label">de</span>
+
+            <!-- TOTAL DE PARCELAS -->
+            <div class="installment-input-box">
+              <label class="field-label" for="totalInstallments">Total de parcelas</label>
+              <div class="stepper-control">
+                <button type="button" class="stepper-btn" onclick="stepValue('totalInstallments', -1)" aria-label="Diminuir total de parcelas" title="Diminuir">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 12h14"></path>
+                  </svg>
+                </button>
+                <input type="number" id="totalInstallments" class="stepper-input tabular-num" value="5" min="1" max="120" oninput="updateInstallmentHint()">
+                <button type="button" class="stepper-btn" onclick="stepValue('totalInstallments', 1)" aria-label="Aumentar total de parcelas" title="Aumentar">
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M5 12h14"></path>
+                    <path d="M12 5v14"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <!-- ATALHOS RÁPIDOS DE PARCELAS FREQUENTES -->
+          <div class="installment-quick-chips">
+            <span class="installment-chip-caption">Atalhos:</span>
+            <button type="button" class="quick-chip-btn" data-val="2" onclick="setTotalInstallments(2)">2x</button>
+            <button type="button" class="quick-chip-btn" data-val="3" onclick="setTotalInstallments(3)">3x</button>
+            <button type="button" class="quick-chip-btn" data-val="4" onclick="setTotalInstallments(4)">4x</button>
+            <button type="button" class="quick-chip-btn active" data-val="5" onclick="setTotalInstallments(5)">5x</button>
+            <button type="button" class="quick-chip-btn" data-val="6" onclick="setTotalInstallments(6)">6x</button>
+            <button type="button" class="quick-chip-btn" data-val="10" onclick="setTotalInstallments(10)">10x</button>
+            <button type="button" class="quick-chip-btn" data-val="12" onclick="setTotalInstallments(12)">12x</button>
+          </div>
+
+          <p class="installments-summary-hint tabular-num" id="installmentsHint">
+            Lançará 1 parcela neste mês e as restantes nos meses seguintes até ser quitada.
+          </p>
+        </div>
+
+        <!-- ÚNICO BOTÃO PRIMÁRIO DA TELA (REGRA 7) -->
+        <button type="submit" class="btn-primary" style="margin-top: 16px;">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 12h14"></path>
+            <path d="M12 5v14"></path>
+          </svg>
+          Adicionar despesa
+        </button>
+      </form>
+    </section>
+
+    <!-- FILTRO SEGMENTADO -->
+    <div class="segmented-control" role="tablist" aria-label="Filtrar despesas">
+      <button class="segmented-btn active" role="tab" aria-selected="true" onclick="applyFilter('all', this)" id="filterAll">
+        Todas <span class="segmented-count tabular-num" id="countAll">0</span>
+      </button>
+      <button class="segmented-btn" role="tab" aria-selected="false" onclick="applyFilter('pending', this)" id="filterPending">
+        A pagar <span class="segmented-count tabular-num" id="countPending">0</span>
+      </button>
+      <button class="segmented-btn" role="tab" aria-selected="false" onclick="applyFilter('paid', this)" id="filterPaid">
+        Liquidadas <span class="segmented-count tabular-num" id="countPaid">0</span>
+      </button>
+    </div>
+
+    <!-- LISTA DE TRANSAÇÕES -->
+    <main class="transactions-card" id="transactionsContainer" aria-label="Lista de despesas do período">
+      <!-- Inserido dinamicamente -->
+    </main>
+
+    <!-- BARRA DE UTILIDADES -->
+    <footer class="footer-actions">
+      <button class="btn-secondary" onclick="replicateRecurringBills()">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+          <path d="M3 3v5h5"></path>
+          <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path>
+          <path d="M16 21h5v-5"></path>
+        </svg>
+        Importar fixas do mês anterior
+      </button>
+
+      <span style="font-size: 12px; color: var(--text-3); font-weight: 500;">
+        Armazenamento local seguro
+      </span>
+    </footer>
+
+  </div>
+
+  <!-- MODAL DE GERENCIAMENTO DE CARTÕES -->
+  <div class="modal-backdrop" id="cardModalBackdrop" onclick="closeCardModal(event)">
+    <div class="modal-window" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="cardModalTitle">
+      <div class="modal-header-row">
+        <h3 class="modal-heading" id="cardModalTitle">Gerenciar cartões</h3>
+        <button class="btn-icon" style="width: 36px; height: 36px;" onclick="closeCardModal()" aria-label="Fechar janela">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <p class="modal-text">
+        Cadastre seus cartões para identificar as compras facilmente na listagem.
+      </p>
+
+      <!-- FORMULÁRIO DE CADASTRO DE CARTÃO -->
+      <form id="cardForm" onsubmit="submitNewCard(event)" style="display: flex; flex-direction: column; gap: 12px;">
+        <div class="input-field-group">
+          <label class="field-label" for="cardNickname">Apelido do cartão</label>
+          <input type="text" id="cardNickname" class="input-text" placeholder="Exemplo: Meu Cartão Inter, Cartão Roxinho" required autocomplete="off">
+        </div>
+
+        <div class="input-field-group">
+          <label class="field-label" for="cardIssuer">Nome da prestadora / banco</label>
+          <input type="text" id="cardIssuer" class="input-text" placeholder="Exemplo: Inter, Nubank, Itaú, Bradesco" required autocomplete="off">
+        </div>
+
+        <button type="submit" class="btn-secondary" style="width: 100%;">
+          Salvar cartão
+        </button>
+      </form>
+
+      <!-- CARTÕES CADASTRADOS -->
+      <div style="display: flex; flex-direction: column; gap: 8px; margin-top: 8px;">
+        <label class="field-label">Cartões cadastrados</label>
+        <div class="cards-list-box" id="cardsListBox">
+          <!-- Inserido dinamicamente -->
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- MODAL DE CONFIGURAÇÕES E BACKUP -->
+  <div class="modal-backdrop" id="backupModalBackdrop" onclick="closeBackupModal(event)">
+    <div class="modal-window" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="backupModalTitle">
+      <div class="modal-header-row">
+        <h3 class="modal-heading" id="backupModalTitle">Cópia de segurança e dados</h3>
+        <button class="btn-icon" style="width: 36px; height: 36px;" onclick="closeBackupModal()" aria-label="Fechar janela">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M18 6 6 18"></path>
+            <path d="m6 6 12 12"></path>
+          </svg>
+        </button>
+      </div>
+
+      <p class="modal-text">
+        Os dados permanecem exclusivamente neste dispositivo. Exporte um arquivo para salvar uma cópia ou restaurar em outro aparelho.
+      </p>
+
+      <div class="modal-btn-row">
+        <button class="btn-secondary" onclick="exportDataFile()">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="7 10 12 15 17 10"></polyline>
+            <line x1="12" y1="15" x2="12" y2="3"></line>
+          </svg>
+          Exportar dados
+        </button>
+
+        <label class="btn-secondary" style="cursor: pointer;">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+            <polyline points="17 8 12 3 7 8"></polyline>
+            <line x1="12" y1="3" x2="12" y2="15"></line>
+          </svg>
+          Importar dados
+          <input type="file" id="importFileInput" accept=".json" style="display: none;" onchange="importDataFile(event)">
+        </label>
+      </div>
+
+      <div style="padding-top: 12px; border-top: 1px solid var(--border);">
+        <button class="btn-secondary" style="color: var(--negative); border-color: var(--border); width: 100%;" onclick="clearDatabase()">
+          Apagar todos os registros
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- RECIPIENTE DE NOTIFICAÇÕES (TOAST) -->
+  <div class="toast-container" id="toastContainer" aria-live="polite"></div>
+
+  <script>
+    /* ESTADO DA APLICAÇÃO */
+    const DB_KEY = 'radar_despesas_store_v2';
+    const CARDS_KEY = 'radar_despesas_cards_v2';
+    const THEME_STORAGE_KEY = 'radar_despesas_theme_v2';
+
+    let expensesDB = {};
+    let cardsDB = [];
+    let activeFilter = 'all';
+    let currentBillingType = 'single';
+
+    const now = new Date();
+    const systemYear = now.getFullYear();
+    const systemMonth = now.getMonth();
+
+    let viewYear = systemYear;
+    let viewMonth = systemMonth;
+
+    const monthNames = [
+      'janeiro', 'fevereiro', 'março', 'abril', 'maio', 'junho',
+      'julho', 'agosto', 'setembro', 'outubro', 'novembro', 'dezembro'
+    ];
+
+    /* FORMATADOR OFICIAL PT-BR (REGRA 8) */
+    const currencyFormatter = new Intl.NumberFormat('pt-BR', {
+      style: 'currency',
+      currency: 'BRL'
+    });
+
+    function formatBRL(value) {
+      return currencyFormatter.format(value || 0);
+    }
+
+    /* INICIALIZAÇÃO */
+    function initialize() {
+      setupTheme();
+      loadDatabase();
+      loadCards();
+      setupCurrencyInputMask();
+      updateInstallmentHint();
+      renderView();
+    }
+
+    /* SISTEMA DE TEMAS */
+    function setupTheme() {
+      const stored = localStorage.getItem(THEME_STORAGE_KEY);
+      if (stored === 'dark' || stored === 'light') {
+        setTheme(stored);
+      } else {
+        const prefersDark = window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches;
+        setTheme(prefersDark ? 'dark' : 'light');
+      }
+    }
+
+    function toggleTheme() {
+      const current = document.documentElement.getAttribute('data-theme') || 'light';
+      const target = current === 'dark' ? 'light' : 'dark';
+      setTheme(target);
+      localStorage.setItem(THEME_STORAGE_KEY, target);
+      showToast(target === 'dark' ? 'Tema escuro ativado' : 'Tema claro ativado');
+    }
+
+    function setTheme(theme) {
+      document.documentElement.setAttribute('data-theme', theme);
+      const sun = document.getElementById('iconSun');
+      const moon = document.getElementById('iconMoon');
+      const meta = document.getElementById('metaThemeColor');
+
+      if (theme === 'dark') {
+        sun.style.display = 'block';
+        moon.style.display = 'none';
+        if (meta) meta.setAttribute('content', '#0B0F14');
+      } else {
+        sun.style.display = 'none';
+        moon.style.display = 'block';
+        if (meta) meta.setAttribute('content', '#F7F8FA');
+      }
+    }
+
+    /* GERENCIAMENTO DE CARTÕES */
+    function loadCards() {
+      try {
+        const raw = localStorage.getItem(CARDS_KEY);
+        if (raw) {
+          cardsDB = JSON.parse(raw);
+        } else {
+          cardsDB = [
+            { id: 'card_inter', nickname: 'Meu Cartão Inter', issuer: 'Inter' }
+          ];
+          localStorage.setItem(CARDS_KEY, JSON.stringify(cardsDB));
+        }
+      } catch (e) {
+        cardsDB = [
+          { id: 'card_inter', nickname: 'Meu Cartão Inter', issuer: 'Inter' }
+        ];
+      }
+      populateCardsSelect();
+      renderCardsList();
+    }
+
+    function saveCards() {
+      localStorage.setItem(CARDS_KEY, JSON.stringify(cardsDB));
+      populateCardsSelect();
+      renderCardsList();
+    }
+
+    function populateCardsSelect() {
+      const select = document.getElementById('expenseCard');
+      const previousValue = select.value;
+
+      select.innerHTML = `
+        <option value="">Sem cartão (Boleto, Pix ou Dinheiro)</option>
+        ${cardsDB.map(card => `
+          <option value="${card.id}">${card.issuer} · ${card.nickname}</option>
+        `).join('')}
+      `;
+
+      if (previousValue && cardsDB.some(c => c.id === previousValue)) {
+        select.value = previousValue;
+      } else if (cardsDB.length > 0) {
+        select.value = cardsDB[0].id;
+      }
+    }
+
+    function renderCardsList() {
+      const container = document.getElementById('cardsListBox');
+      if (cardsDB.length === 0) {
+        container.innerHTML = `
+          <div style="font-size: 12px; color: var(--text-3); text-align: center; padding: 12px;">
+            Nenhum cartão cadastrado.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = cardsDB.map(card => `
+        <div class="card-item-row">
+          <div class="card-item-details">
+            <span class="card-item-name">${card.nickname}</span>
+            <span class="card-item-issuer">${card.issuer}</span>
+          </div>
+          <button type="button" class="btn-remove-tx" onclick="removeCard('${card.id}')" aria-label="Remover cartão" title="Excluir cartão">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M3 6h18"></path>
+              <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+              <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+            </svg>
+          </button>
+        </div>
+      `).join('');
+    }
+
+    function submitNewCard(event) {
+      event.preventDefault();
+      const nicknameInput = document.getElementById('cardNickname');
+      const issuerInput = document.getElementById('cardIssuer');
+
+      const nickname = nicknameInput.value.trim();
+      const issuer = issuerInput.value.trim();
+
+      if (!nickname || !issuer) {
+        showToast('Preencha o apelido e o nome da prestadora');
+        return;
+      }
+
+      const newCard = {
+        id: 'card_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+        nickname,
+        issuer
+      };
+
+      cardsDB.push(newCard);
+      saveCards();
+
+      document.getElementById('expenseCard').value = newCard.id;
+
+      nicknameInput.value = '';
+      issuerInput.value = '';
+      closeCardModal();
+      showToast(`Cartão ${issuer} cadastrado com sucesso`);
+    }
+
+    function removeCard(id) {
+      if (confirm('Deseja excluir este cartão do catálogo?')) {
+        cardsDB = cardsDB.filter(c => c.id !== id);
+        saveCards();
+        showToast('Cartão removido');
+      }
+    }
+
+    function openCardModal() {
+      document.getElementById('cardModalBackdrop').classList.add('active');
+      document.getElementById('cardNickname').focus();
+    }
+
+    function closeCardModal(event) {
+      if (event && event.target !== event.currentTarget) return;
+      document.getElementById('cardModalBackdrop').classList.remove('active');
+    }
+
+    /* BASE DE DADOS */
+    function loadDatabase() {
+      try {
+        const raw = localStorage.getItem(DB_KEY);
+        if (raw) {
+          expensesDB = JSON.parse(raw);
+        }
+      } catch (err) {
+        expensesDB = {};
+      }
+    }
+
+    function persistDatabase() {
+      localStorage.setItem(DB_KEY, JSON.stringify(expensesDB));
+      renderView();
+    }
+
+    function getPeriodKey(y = viewYear, m = viewMonth) {
+      return `${y}-${String(m + 1).padStart(2, '0')}`;
+    }
+
+    function calculateTargetPeriod(baseYear, baseMonth, monthOffset) {
+      const totalMonths = (baseYear * 12) + baseMonth + monthOffset;
+      const targetYear = Math.floor(totalMonths / 12);
+      const targetMonth = totalMonths % 12;
+      return {
+        year: targetYear,
+        month: targetMonth,
+        key: `${targetYear}-${String(targetMonth + 1).padStart(2, '0')}`
+      };
+    }
+
+    /* CONTROLE STEPPER E ATALHOS DE PARCELAS */
+    function stepValue(inputId, delta) {
+      const input = document.getElementById(inputId);
+      let val = (parseInt(input.value, 10) || 1) + delta;
+      if (val < 1) val = 1;
+      if (val > 120) val = 120;
+      input.value = val;
+      updateInstallmentHint();
+    }
+
+    function setTotalInstallments(num) {
+      document.getElementById('totalInstallments').value = num;
+      updateInstallmentHint();
+    }
+
+    /* SELEÇÃO DO TIPO DE COBRANÇA */
+    function selectBillingType(type) {
+      currentBillingType = type;
+      
+      const btnSingle = document.getElementById('btnTypeSingle');
+      const btnRecurring = document.getElementById('btnTypeRecurring');
+      const btnInstallments = document.getElementById('btnTypeInstallments');
+      const panel = document.getElementById('installmentsPanel');
+      const amountLabel = document.getElementById('amountLabel');
+
+      btnSingle.classList.toggle('active', type === 'single');
+      btnRecurring.classList.toggle('active', type === 'recurring');
+      btnInstallments.classList.toggle('active', type === 'installments');
+
+      if (type === 'installments') {
+        panel.classList.add('active');
+        amountLabel.textContent = 'Valor de cada parcela';
+        updateInstallmentHint();
+      } else {
+        panel.classList.remove('active');
+        amountLabel.textContent = 'Valor';
+      }
+    }
+
+    function updateInstallmentHint() {
+      const currentInput = document.getElementById('currentInstallment');
+      const totalInput = document.getElementById('totalInstallments');
+      const hint = document.getElementById('installmentsHint');
+
+      let current = parseInt(currentInput.value, 10) || 1;
+      let total = parseInt(totalInput.value, 10) || 1;
+
+      if (current < 1) current = 1;
+      if (total < 1) total = 1;
+
+      // Atualiza o estado visual ativo dos botões de atalho
+      document.querySelectorAll('.quick-chip-btn').forEach(btn => {
+        const val = parseInt(btn.getAttribute('data-val'), 10);
+        btn.classList.toggle('active', val === total);
+      });
+
+      if (current > total) {
+        hint.textContent = 'A parcela atual não pode ser superior ao total de parcelas.';
+        hint.style.color = 'var(--negative)';
+        return;
+      }
+
+      hint.style.color = 'var(--text-2)';
+      const remainingCount = total - current;
+
+      if (remainingCount === 0) {
+        hint.textContent = `Última parcela (${current} de ${total}). O lançamento ocorrerá apenas neste mês e a dívida será concluída.`;
+      } else {
+        const finalPeriod = calculateTargetPeriod(viewYear, viewMonth, remainingCount);
+        const finalMonthName = monthNames[finalPeriod.month];
+        hint.textContent = `Lançará ${current} de ${total} neste mês e as parcelas restantes nos próximos ${remainingCount} mês(es). A dívida encerrará em ${finalMonthName} de ${finalPeriod.year}.`;
+      }
+    }
+
+    /* MÁSCARA AUTOMÁTICA DE MOEDA */
+    function setupCurrencyInputMask() {
+      const input = document.getElementById('expenseAmount');
+      input.addEventListener('input', (event) => {
+        let digits = event.target.value.replace(/\D/g, '');
+        if (!digits) {
+          event.target.value = '';
+          return;
+        }
+        let numeric = (parseInt(digits, 10) / 100).toFixed(2);
+        const parts = numeric.split('.');
+        parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+        event.target.value = parts.join(',');
+      });
+    }
+
+    function parseInputValue(str) {
+      if (!str) return 0;
+      let cleaned = str.replace(/\./g, '').replace(',', '.');
+      return parseFloat(cleaned) || 0;
+    }
+
+    /* NAVEGAÇÃO DE PERÍODOS */
+    function shiftMonth(offset) {
+      viewMonth += offset;
+      if (viewMonth > 11) {
+        viewMonth = 0;
+        viewYear++;
+      } else if (viewMonth < 0) {
+        viewMonth = 11;
+        viewYear--;
+      }
+      updateInstallmentHint();
+      renderView();
+    }
+
+    function jumpToCurrentMonth() {
+      viewYear = systemYear;
+      viewMonth = systemMonth;
+      updateInstallmentHint();
+      renderView();
+    }
+
+    /* SUBMISSÃO DE DESPESA */
+    function submitExpense(event) {
+      event.preventDefault();
+      const titleEl = document.getElementById('expenseTitle');
+      const amountEl = document.getElementById('expenseAmount');
+      const cardSelect = document.getElementById('expenseCard');
+      const dueDayEl = document.getElementById('expenseDueDay');
+
+      const title = titleEl.value.trim();
+      const amount = parseInputValue(amountEl.value);
+      const cardId = cardSelect.value || '';
+      const dueDay = dueDayEl.value ? parseInt(dueDayEl.value, 10) : null;
+
+      const selectedCard = cardsDB.find(c => c.id === cardId);
+      const cardIssuer = selectedCard ? selectedCard.issuer : null;
+      const cardNickname = selectedCard ? selectedCard.nickname : null;
+
+      if (!title || amount <= 0) {
+        showToast('Informe a descrição e um valor válido');
+        return;
+      }
+
+      if (currentBillingType === 'installments') {
+        const currentInput = document.getElementById('currentInstallment');
+        const totalInput = document.getElementById('totalInstallments');
+        const currentInstallment = parseInt(currentInput.value, 10) || 1;
+        const totalInstallments = parseInt(totalInput.value, 10) || 1;
+
+        if (currentInstallment > totalInstallments) {
+          showToast('A parcela atual não pode ser superior ao total');
+          return;
+        }
+
+        const installmentGroupId = 'inst_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
+
+        for (let inst = currentInstallment; inst <= totalInstallments; inst++) {
+          const offset = inst - currentInstallment;
+          const target = calculateTargetPeriod(viewYear, viewMonth, offset);
+
+          if (!expensesDB[target.key]) {
+            expensesDB[target.key] = [];
+          }
+
+          const installmentEntry = {
+            id: 'tx_' + Date.now() + '_' + inst + '_' + Math.random().toString(36).substr(2, 4),
+            groupId: installmentGroupId,
+            title,
+            amount,
+            cardId,
+            cardIssuer,
+            cardNickname,
+            dueDay,
+            isRecurring: false,
+            isInstallment: true,
+            currentInstallment: inst,
+            totalInstallments,
+            isPaid: false,
+            timestamp: new Date().toISOString()
+          };
+
+          expensesDB[target.key].unshift(installmentEntry);
+        }
+
+        persistDatabase();
+
+        const remaining = totalInstallments - currentInstallment;
+        if (remaining > 0) {
+          showToast(`Parcela ${currentInstallment} de ${totalInstallments} lançada (+${remaining} nos próximos meses)`);
+        } else {
+          showToast(`Última parcela lançada com sucesso (${totalInstallments} de ${totalInstallments})`);
+        }
+
+      } else {
+        const key = getPeriodKey();
+        if (!expensesDB[key]) {
+          expensesDB[key] = [];
+        }
+
+        const entry = {
+          id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          title,
+          amount,
+          cardId,
+          cardIssuer,
+          cardNickname,
+          dueDay,
+          isRecurring: (currentBillingType === 'recurring'),
+          isInstallment: false,
+          isPaid: false,
+          timestamp: new Date().toISOString()
+        };
+
+        expensesDB[key].unshift(entry);
+        persistDatabase();
+
+        showToast(currentBillingType === 'recurring' ? 'Despesa fixa adicionada com sucesso' : 'Despesa adicionada com sucesso');
+      }
+
+      titleEl.value = '';
+      amountEl.value = '';
+      dueDayEl.value = '';
+      titleEl.focus();
+    }
+
+    /* ALTERAR STATUS DE PAGAMENTO */
+    function toggleExpenseStatus(id) {
+      const key = getPeriodKey();
+      const list = expensesDB[key] || [];
+      const item = list.find(x => x.id === id);
+      if (item) {
+        item.isPaid = !item.isPaid;
+        persistDatabase();
+        showToast(item.isPaid ? 'Despesa marcada como liquidada' : 'Despesa reaberta como pendente');
+      }
+    }
+
+    /* REMOVER TRANSAÇÃO */
+    function removeExpense(id) {
+      const key = getPeriodKey();
+      if (!expensesDB[key]) return;
+      expensesDB[key] = expensesDB[key].filter(x => x.id !== id);
+      persistDatabase();
+      showToast('Registro removido');
+    }
+
+    /* REPLICAR DESPESAS FIXAS DO MÊS ANTERIOR */
+    function replicateRecurringBills() {
+      const prev = calculateTargetPeriod(viewYear, viewMonth, -1);
+      const currentKey = getPeriodKey();
+
+      const sourceList = expensesDB[prev.key] || [];
+      const recurringItems = sourceList.filter(item => item.isRecurring);
+
+      if (recurringItems.length === 0) {
+        showToast('Nenhuma despesa fixa encontrada no mês anterior');
+        return;
+      }
+
+      if (!expensesDB[currentKey]) {
+        expensesDB[currentKey] = [];
+      }
+
+      let count = 0;
+      recurringItems.forEach(rec => {
+        const alreadyExists = expensesDB[currentKey].some(
+          cur => cur.title.toLowerCase() === rec.title.toLowerCase() && cur.isRecurring
+        );
+        if (!alreadyExists) {
+          expensesDB[currentKey].push({
+            id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+            title: rec.title,
+            amount: rec.amount,
+            cardId: rec.cardId,
+            cardIssuer: rec.cardIssuer,
+            cardNickname: rec.cardNickname,
+            dueDay: rec.dueDay,
+            isRecurring: true,
+            isInstallment: false,
+            isPaid: false,
+            timestamp: new Date().toISOString()
+          });
+          count++;
+        }
+      });
+
+      if (count > 0) {
+        persistDatabase();
+        showToast(`${count} despesa(s) fixa(s) importada(s)`);
+      } else {
+        showToast('As despesas fixas do mês anterior já constam no período atual');
+      }
+    }
+
+    /* FILTROS SEGMENTADOS */
+    function applyFilter(filter, button) {
+      activeFilter = filter;
+      document.querySelectorAll('.segmented-btn').forEach(btn => {
+        btn.classList.remove('active');
+        btn.setAttribute('aria-selected', 'false');
+      });
+      button.classList.add('active');
+      button.setAttribute('aria-selected', 'true');
+      renderList();
+    }
+
+    /* RENDERIZAÇÃO GERAL */
+    function renderView() {
+      document.getElementById('currentPeriodDisplay').textContent = `${monthNames[viewMonth]} de ${viewYear}`;
+
+      const todayBtn = document.getElementById('todayBtn');
+      if (viewYear !== systemYear || viewMonth !== systemMonth) {
+        todayBtn.classList.add('visible');
+      } else {
+        todayBtn.classList.remove('visible');
+      }
+
+      const key = getPeriodKey();
+      const list = expensesDB[key] || [];
+
+      let total = 0;
+      let pending = 0;
+      let paid = 0;
+      let countPaid = 0;
+      let countPending = 0;
+
+      list.forEach(item => {
+        total += item.amount;
+        if (item.isPaid) {
+          paid += item.amount;
+          countPaid++;
+        } else {
+          pending += item.amount;
+          countPending++;
+        }
+      });
+
+      document.getElementById('totalMonthValue').textContent = formatBRL(total);
+      document.getElementById('pendingValue').textContent = '− ' + formatBRL(pending);
+      document.getElementById('paidValue').textContent = formatBRL(paid);
+
+      const ratio = total > 0 ? (paid / total) : 0;
+      const percentage = Math.round(ratio * 100);
+      document.getElementById('paidPercentageBadge').textContent = `${percentage}% liquidado`;
+
+      const progressBar = document.getElementById('budgetProgress');
+      progressBar.style.width = `${percentage}%`;
+
+      document.getElementById('countAll').textContent = list.length;
+      document.getElementById('countPending').textContent = countPending;
+      document.getElementById('countPaid').textContent = countPaid;
+
+      renderList();
+    }
+
+    /* RENDERIZAÇÃO DA LISTA DE TRANSAÇÕES */
+    function renderList() {
+      const container = document.getElementById('transactionsContainer');
+      const key = getPeriodKey();
+      const list = expensesDB[key] || [];
+
+      let filtered = list;
+      if (activeFilter === 'pending') {
+        filtered = list.filter(item => !item.isPaid);
+      } else if (activeFilter === 'paid') {
+        filtered = list.filter(item => item.isPaid);
+      }
+
+      if (filtered.length === 0) {
+        let msg = 'Nenhuma despesa registrada para este mês.';
+        if (activeFilter === 'pending' && list.length > 0) {
+          msg = 'Todas as despesas deste período estão quitadas.';
+        } else if (activeFilter === 'paid' && list.length > 0) {
+          msg = 'Nenhuma despesa foi liquidada ainda.';
+        }
+
+        container.innerHTML = `
+          <div class="empty-state">
+            <svg class="empty-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <rect width="20" height="14" x="2" y="5" rx="2"></rect>
+              <line x1="2" x2="22" y1="10" y2="10"></line>
+            </svg>
+            <h3 class="empty-title">Sem registros no período</h3>
+            <p class="empty-desc">${msg}</p>
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = filtered.map(item => {
+        const isCard = !!item.cardIssuer;
+        return `
+          <div class="transaction-row ${item.isPaid ? 'paid' : ''}">
+            <div class="tx-left">
+              <div class="tx-icon-box ${isCard ? '' : 'non-card'}" aria-hidden="true">
+                ${isCard ? `
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <rect width="20" height="14" x="2" y="5" rx="2"></rect>
+                    <line x1="2" x2="22" y1="10" y2="10"></line>
+                  </svg>
+                ` : `
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"></path>
+                    <path d="M16 8h-8"></path>
+                    <path d="M16 12h-8"></path>
+                  </svg>
+                `}
+              </div>
+
+              <div class="tx-info">
+                <span class="tx-title" title="${item.title}">${item.title}</span>
+                <div class="tx-meta">
+                  ${isCard ? `<span class="tx-badge card-issuer">${item.cardIssuer}</span>` : ''}
+                  ${item.dueDay ? `<span class="tx-badge tabular-num">Dia ${item.dueDay}</span>` : ''}
+                  ${item.isInstallment ? `<span class="tx-badge installment tabular-num">${item.currentInstallment} de ${item.totalInstallments}</span>` : ''}
+                  ${item.isRecurring ? `<span class="tx-badge">Fixa</span>` : ''}
+                </div>
+              </div>
+            </div>
+
+            <div class="tx-right">
+              <span class="tx-value tabular-num">− ${formatBRL(item.amount)}</span>
+
+              <button class="btn-check-tx" onclick="toggleExpenseStatus('${item.id}')" aria-label="${item.isPaid ? 'Marcar como pendente' : 'Marcar como quitada'}" title="${item.isPaid ? 'Reabrir despesa' : 'Liquidar despesa'}">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M20 6 9 17l-5-5"></path>
+                </svg>
+              </button>
+
+              <button class="btn-remove-tx" onclick="removeExpense('${item.id}')" aria-label="Remover registro" title="Excluir">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M3 6h18"></path>
+                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+                </svg>
+              </button>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    /* MODAL DE BACKUP E OPÇÕES */
+    function openBackupModal() {
+      document.getElementById('backupModalBackdrop').classList.add('active');
+    }
+
+    function closeBackupModal(event) {
+      if (event && event.target !== event.currentTarget) return;
+      document.getElementById('backupModalBackdrop').classList.remove('active');
+    }
+
+    function exportDataFile() {
+      const backupPayload = {
+        expenses: expensesDB,
+        cards: cardsDB
+      };
+      const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backupPayload, null, 2));
+      const anchor = document.createElement('a');
+      anchor.setAttribute('href', dataStr);
+      anchor.setAttribute('download', `despesas_backup_${new Date().toISOString().slice(0, 10)}.json`);
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      showToast('Cópia de segurança gerada');
+    }
+
+    function importDataFile(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        try {
+          const parsed = JSON.parse(e.target.result);
+          if (parsed && typeof parsed === 'object') {
+            if (parsed.expenses) {
+              expensesDB = parsed.expenses;
+              cardsDB = parsed.cards || [];
+            } else {
+              expensesDB = parsed;
+            }
+            persistDatabase();
+            saveCards();
+            closeBackupModal();
+            showToast('Dados restaurados com êxito');
+          } else {
+            showToast('Formato de arquivo inválido');
+          }
+        } catch (err) {
+          showToast('Erro ao processar o arquivo');
+        }
+      };
+      reader.readAsText(file);
+    }
+
+    function clearDatabase() {
+      if (confirm('Confirma a exclusão de todos os registros de despesas armazenados? Esta ação não pode ser desfeita.')) {
+        expensesDB = {};
+        persistDatabase();
+        closeBackupModal();
+        showToast('Todos os registros foram removidos');
+      }
+    }
+
+    /* SISTEMA DE TOAST */
+    function showToast(message) {
+      const container = document.getElementById('toastContainer');
+      const toast = document.createElement('div');
+      toast.className = 'toast-card';
+      toast.textContent = message;
+      container.appendChild(toast);
+
+      setTimeout(() => {
+        toast.style.opacity = '0';
+        toast.style.transform = 'translateY(8px)';
+        toast.style.transition = 'all 180ms var(--ease)';
+        setTimeout(() => toast.remove(), 200);
+      }, 3000);
+    }
+
+    window.addEventListener('DOMContentLoaded', initialize);
+  </script>
+</body>
+</html>
