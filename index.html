@@ -13,7 +13,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
   
-  <!-- TESSERACT.JS OCR MOTOR CLIENT-SIDE -->
+  <!-- TESSERACT.JS OCR CLIENT-SIDE (FALLBACK OFFLINE) -->
   <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
   <style>
@@ -1474,7 +1474,7 @@
 
   </div>
 
-  <!-- MODAL DE PROCESSAMENTO DE COMPROVANTE (OCR) -->
+  <!-- MODAL DE PROCESSAMENTO DE COMPROVANTE (OCR / IA) -->
   <div class="modal-backdrop" id="scanModalBackdrop">
     <div class="modal-window" role="dialog" aria-modal="true" aria-labelledby="scanModalTitle">
       <div class="modal-header-row">
@@ -1493,7 +1493,7 @@
 
       <div style="display: flex; flex-direction: column; gap: 8px;">
         <div style="display: flex; justify-content: space-between; align-items: center;">
-          <span class="field-label" id="scanProgressLabel">Inicializando leitor óptico...</span>
+          <span class="field-label" id="scanProgressLabel">Otimizando imagem...</span>
           <span class="field-label tabular-num" id="scanProgressPercent">0%</span>
         </div>
         <div class="scan-progress-bar-bg" aria-hidden="true">
@@ -1501,8 +1501,8 @@
         </div>
       </div>
 
-      <p class="modal-text" style="font-size: 12px; color: var(--text-3);">
-        O reconhecimento é executado de forma 100% privada dentro deste aparelho sem transmissão de dados externos.
+      <p class="modal-text" style="font-size: 12px; color: var(--text-3);" id="scanModeIndicator">
+        Processamento de imagem em andamento.
       </p>
     </div>
   </div>
@@ -1555,13 +1555,25 @@
   <div class="modal-backdrop" id="backupModalBackdrop" onclick="closeBackupModal(event)">
     <div class="modal-window" onclick="event.stopPropagation()" role="dialog" aria-modal="true" aria-labelledby="backupModalTitle">
       <div class="modal-header-row">
-        <h3 class="modal-heading" id="backupModalTitle">Cópia de segurança e dados</h3>
+        <h3 class="modal-heading" id="backupModalTitle">Configurações & Cópia de segurança</h3>
         <button class="btn-icon" style="width: 36px; height: 36px;" onclick="closeBackupModal()" aria-label="Fechar janela">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="M18 6 6 18"></path>
             <path d="m6 6 12 12"></path>
           </svg>
         </button>
+      </div>
+
+      <!-- CONFIGURAÇÃO DA CHAVE GEMINI VISION (OPCIONAL PARA PRECISÃO MÁXIMA) -->
+      <div class="input-field-group" style="padding-bottom: 12px; border-bottom: 1px solid var(--border);">
+        <div class="field-label-row">
+          <label class="field-label" for="geminiApiKeyInput">Chave Gemini IA (Opcional)</label>
+          <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener" class="btn-text" style="font-size: 11px;">Obter chave gratuita</a>
+        </div>
+        <input type="password" id="geminiApiKeyInput" class="input-text" placeholder="Cole sua chave gratuita do Google AI Studio">
+        <span style="font-size: 11px; color: var(--text-3); line-height: 1.4;">
+          Permite leitura de alta precisão em comprovantes térmicos, amassados e anotações manuscritas à mão.
+        </span>
       </div>
 
       <p class="modal-text">
@@ -1605,6 +1617,7 @@
     const DB_KEY = 'radar_despesas_store_v2';
     const CARDS_KEY = 'radar_despesas_cards_v2';
     const THEME_STORAGE_KEY = 'radar_despesas_theme_v2';
+    const GEMINI_KEY_STORAGE = 'radar_despesas_gemini_key_v1';
 
     let expensesDB = {};
     let cardsDB = [];
@@ -1646,6 +1659,7 @@
       setupTheme();
       loadDatabase();
       loadCards();
+      setupGeminiKeyInput();
       setupCurrencyInputMask();
       updateInstallmentHint();
       renderView();
@@ -1808,24 +1822,110 @@
       document.getElementById('cardModalBackdrop').classList.remove('active');
     }
 
-    /* ESCANEAMENTO E LEITURA DE COMPROVANTES (OCR MÉTODO 1) */
+    /* CHAVE DE API GEMINI VISION (CONFIGURAÇÃO) */
+    function setupGeminiKeyInput() {
+      const input = document.getElementById('geminiApiKeyInput');
+      const saved = localStorage.getItem(GEMINI_KEY_STORAGE) || '';
+      input.value = saved;
+      input.addEventListener('change', () => {
+        const val = input.value.trim();
+        localStorage.setItem(GEMINI_KEY_STORAGE, val);
+        showToast(val ? 'Chave de IA configurada com sucesso' : 'Chave de IA desativada');
+      });
+    }
+
+    /* REDIMENSIONAMENTO E OTIMIZAÇÃO DE IMAGEM VIA CANVAS */
+    function optimizeImage(file, maxDimension = 1200) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => {
+          const img = new Image();
+          img.onload = () => {
+            let width = img.width;
+            let height = img.height;
+
+            if (width > maxDimension || height > maxDimension) {
+              if (width > height) {
+                height = Math.round((height * maxDimension) / width);
+                width = maxDimension;
+              } else {
+                width = Math.round((width * maxDimension) / height);
+                height = maxDimension;
+              }
+            }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = width;
+            canvas.height = height;
+            const ctx = canvas.getContext('2d');
+            ctx.drawImage(img, 0, 0, width, height);
+
+            // Canvas pré-processado com contraste reforçado para OCR local de cupons térmicos
+            const ocrCanvas = document.createElement('canvas');
+            ocrCanvas.width = width;
+            ocrCanvas.height = height;
+            const ocrCtx = ocrCanvas.getContext('2d');
+            try {
+              ocrCtx.filter = 'contrast(1.4) grayscale(1)';
+            } catch (errFilter) {}
+            ocrCtx.drawImage(img, 0, 0, width, height);
+
+            const dataUrl = canvas.toDataURL('image/jpeg', 0.85);
+            const base64 = dataUrl.split(',')[1];
+            resolve({ dataUrl, base64, canvas, ocrCanvas });
+          };
+          img.onerror = reject;
+          img.src = e.target.result;
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    /* ESCANEAMENTO E LEITURA DE COMPROVANTES */
     function triggerReceiptScan() {
       document.getElementById('receiptFileInput').click();
     }
 
-    function handleReceiptUpload(event) {
+    async function handleReceiptUpload(event) {
       const file = event.target.files && event.target.files[0];
       if (!file) return;
-
-      // Exibe pré-visualização e modal de leitura
-      const previewImg = document.getElementById('scanPreviewImg');
-      previewImg.src = URL.createObjectURL(file);
 
       const modal = document.getElementById('scanModalBackdrop');
       modal.classList.add('active');
 
-      updateScanProgress(0, 'Carregando motor óptico...');
-      processReceiptWithTesseract(file);
+      updateScanProgress(10, 'Otimizando imagem para leitura...');
+
+      try {
+        const optimized = await optimizeImage(file, 1200);
+        document.getElementById('scanPreviewImg').src = optimized.dataUrl;
+
+        const geminiKey = localStorage.getItem(GEMINI_KEY_STORAGE);
+
+        if (geminiKey && geminiKey.trim().length > 10) {
+          try {
+            document.getElementById('scanModeIndicator').textContent = 'Análise inteligente com IA ativada.';
+            await processWithGeminiVision(optimized.base64, geminiKey.trim());
+            return;
+          } catch (visionErr) {
+            console.warn('Falha no Gemini Vision, recorrendo ao OCR local:', visionErr);
+            document.getElementById('scanModeIndicator').textContent = 'Recorrendo à leitura óptica local...';
+          }
+        }
+
+        // Processamento OCR local com Tesseract (fallback offline)
+        document.getElementById('scanModeIndicator').textContent = 'Leitura óptica local (sem IA).';
+        await processWithLocalOcr(optimized.ocrCanvas || optimized.canvas);
+
+      } catch (err) {
+        console.error('Erro na leitura:', err);
+        updateScanProgress(0, 'Falha no processamento');
+        setTimeout(() => {
+          modal.classList.remove('active');
+          document.getElementById('receiptFileInput').value = '';
+          showToast('Não foi possível processar este comprovante');
+        }, 1500);
+      }
     }
 
     function updateScanProgress(percent, statusText) {
@@ -1836,64 +1936,109 @@
       }
     }
 
-    async function processReceiptWithTesseract(file) {
-      try {
-        if (typeof Tesseract === 'undefined') {
-          throw new Error('Módulo OCR não disponível offline');
-        }
+    /* MÉTODO A: PROCESSAMENTO COM GEMINI VISION */
+    async function processWithGeminiVision(base64Image, apiKey) {
+      updateScanProgress(40, 'Identificando dados com IA...');
 
-        updateScanProgress(15, 'Inicializando inteligência óptica...');
+      const prompt = `Analise a imagem deste comprovante de pagamento, cupom fiscal de maquininha ou anotação de gastos.
+Identifique:
+1) O nome comercial do estabelecimento ou descrição do gasto (exemplo: 'JF Carnes', 'Supermercado', 'Farmácia').
+2) O valor total numérico em reais pago.
+3) O dia da compra ou vencimento (número de 1 a 31).
 
-        currentOcrWorker = await Tesseract.createWorker('por', 1, {
-          logger: progress => {
-            if (progress.status === 'recognizing text') {
-              const pct = Math.min(95, Math.round(20 + (progress.progress * 75)));
-              updateScanProgress(pct, `Identificando caracteres (${pct}%)...`);
-            }
+Retorne estritamente um JSON no formato:
+{"title":"Nome","amount":120.00,"dueDay":25}`;
+
+      const endpoint = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${apiKey}`;
+
+      const response = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          contents: [{
+            parts: [
+              { text: prompt },
+              { inline_data: { mime_type: 'image/jpeg', data: base64Image } }
+            ]
+          }],
+          generationConfig: {
+            response_mime_type: 'application/json',
+            temperature: 0.1
           }
-        });
+        })
+      });
 
-        const recognition = await currentOcrWorker.recognize(file);
-        const text = recognition && recognition.data ? recognition.data.text : '';
-
-        await currentOcrWorker.terminate();
-        currentOcrWorker = null;
-
-        updateScanProgress(100, 'Processamento concluído');
-
-        setTimeout(() => {
-          document.getElementById('scanModalBackdrop').classList.remove('active');
-          document.getElementById('receiptFileInput').value = '';
-
-          const extracted = parseReceiptText(text);
-
-          if (extracted.amount || extracted.title) {
-            if (extracted.title) {
-              document.getElementById('expenseTitle').value = extracted.title;
-            }
-            if (extracted.amount) {
-              document.getElementById('expenseAmount').value = formatBRLValueInput(extracted.amount);
-            }
-            if (extracted.day) {
-              document.getElementById('expenseDueDay').value = extracted.day;
-            }
-
-            showToast('Dados extraídos do comprovante');
-            document.getElementById('expenseAmount').focus();
-          } else {
-            showToast('Não foi possível identificar valores no comprovante');
-          }
-        }, 400);
-
-      } catch (err) {
-        console.error('Erro na leitura óptica:', err);
-        updateScanProgress(0, 'Falha no processamento');
-        setTimeout(() => {
-          document.getElementById('scanModalBackdrop').classList.remove('active');
-          document.getElementById('receiptFileInput').value = '';
-          showToast('Falha ao processar imagem do comprovante');
-        }, 1200);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error?.message || 'Erro na comunicação com a API de IA');
       }
+
+      updateScanProgress(85, 'Interpretando valores...');
+      const data = await response.json();
+      const rawAnswer = data.candidates?.[0]?.content?.parts?.[0]?.text || '';
+      
+      let parsed = null;
+      try {
+        const jsonMatch = rawAnswer.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          parsed = JSON.parse(jsonMatch[0]);
+        }
+      } catch (errJson) {
+        console.warn('Erro ao interpretar JSON:', errJson);
+      }
+
+      if (parsed) {
+        applyExtractedData(parsed.title, parsed.amount, parsed.dueDay);
+      } else {
+        throw new Error('Formato de resposta inesperado da IA');
+      }
+    }
+
+    /* MÉTODO B: PROCESSAMENTO COM OCR LOCAL (TESSERACT) */
+    async function processWithLocalOcr(canvas) {
+      if (typeof Tesseract === 'undefined') {
+        throw new Error('Motor OCR não carregado');
+      }
+
+      updateScanProgress(25, 'Carregando motor óptico...');
+
+      currentOcrWorker = await Tesseract.createWorker('por', 1, {
+        logger: progress => {
+          if (progress.status === 'recognizing text') {
+            const pct = Math.min(95, Math.round(30 + (progress.progress * 65)));
+            updateScanProgress(pct, `Identificando caracteres (${pct}%)...`);
+          }
+        }
+      });
+
+      const recognition = await currentOcrWorker.recognize(canvas);
+      const text = recognition && recognition.data ? recognition.data.text : '';
+
+      await currentOcrWorker.terminate();
+      currentOcrWorker = null;
+
+      const extracted = parseReceiptText(text);
+      applyExtractedData(extracted.title, extracted.amount, extracted.day);
+    }
+
+    function applyExtractedData(title, amount, day) {
+      updateScanProgress(100, 'Concluído');
+
+      setTimeout(() => {
+        document.getElementById('scanModalBackdrop').classList.remove('active');
+        document.getElementById('receiptFileInput').value = '';
+
+        if (title || amount) {
+          if (title) document.getElementById('expenseTitle').value = title;
+          if (amount) document.getElementById('expenseAmount').value = formatBRLValueInput(amount);
+          if (day) document.getElementById('expenseDueDay').value = day;
+
+          showToast('Dados do comprovante preenchidos');
+          document.getElementById('expenseAmount').focus();
+        } else {
+          showToast('Não foi possível identificar valores neste comprovante');
+        }
+      }, 350);
     }
 
     function cancelReceiptScan() {
@@ -1905,7 +2050,7 @@
       document.getElementById('receiptFileInput').value = '';
     }
 
-    /* PARSER INTELIGENTE DE TEXTO DO COMPROVANTE */
+    /* PARSER AVANÇADO DE TEXTO PARA COMPROVANTES TÉRMICOS */
     function parseReceiptText(rawText) {
       if (!rawText) return { amount: null, title: '', day: null };
 
@@ -1917,7 +2062,7 @@
       let foundTitle = '';
       let foundDay = null;
 
-      // 1. Procura por linhas prioritárias de total
+      // 1. Procura linhas com indicadores de valor
       const totalKeywords = /(?:total|valor|liquido|subtotal|pago|debito|credito|pagamento|a pagar)/i;
 
       for (const line of lines) {
@@ -1933,7 +2078,6 @@
         }
       }
 
-      // Prioridade 2: Maior valor monetário identificado se não encontrou linha de total
       if (!foundAmount) {
         let maxVal = 0;
         for (const line of lines) {
@@ -1948,20 +2092,20 @@
         if (maxVal > 0) foundAmount = maxVal;
       }
 
-      // 2. Extração do nome do estabelecimento (geralmente nas primeiras 5 linhas úteis)
-      const ignoreWords = /(?:cnpj|cpf|comprovante|cupom|fiscal|via|autentic|data|hora|extrato|recibo|banco|transacao|terminal|documento|operacao)/i;
-      for (let i = 0; i < Math.min(lines.length, 6); i++) {
-        const line = lines[i];
+      // 2. Extração de estabelecimento (analisa todas as linhas em busca do nome da loja)
+      const ignoreWords = /(?:cnpj|cpf|comprovante|cupom|fiscal|via|autentic|data|hora|extrato|recibo|banco|transacao|terminal|documento|operacao|aprovado|mastercard|visa|elo|aid|nfc|mercadopago|mercado pago)/i;
+      
+      for (const line of lines) {
         if (line.length >= 3 && /[a-zA-Z]{3,}/.test(line) && !ignoreWords.test(line)) {
-          const cleaned = line.replace(/[^a-zA-Z0-9\sÀ-ÿ]/g, '').trim();
-          if (cleaned.length >= 3) {
-            foundTitle = cleaned;
+          const clean = line.replace(/[^a-zA-Z0-9\sÀ-ÿ]/g, '').trim();
+          if (clean.length >= 3 && clean.length <= 40) {
+            foundTitle = clean;
             break;
           }
         }
       }
 
-      // 3. Procura por data (dia do mês)
+      // 3. Procura por data
       const dateMatch = rawText.match(/(\d{1,2})[\/\-\.](\d{1,2})[\/\-\.](\d{2,4})/);
       if (dateMatch) {
         const dayNum = parseInt(dateMatch[1], 10);
@@ -2459,7 +2603,8 @@
     function exportDataFile() {
       const backupPayload = {
         expenses: expensesDB,
-        cards: cardsDB
+        cards: cardsDB,
+        geminiKey: localStorage.getItem(GEMINI_KEY_STORAGE) || ''
       };
       const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backupPayload, null, 2));
       const anchor = document.createElement('a');
@@ -2483,6 +2628,10 @@
             if (parsed.expenses) {
               expensesDB = parsed.expenses;
               cardsDB = parsed.cards || [];
+              if (parsed.geminiKey) {
+                localStorage.setItem(GEMINI_KEY_STORAGE, parsed.geminiKey);
+                document.getElementById('geminiApiKeyInput').value = parsed.geminiKey;
+              }
             } else {
               expensesDB = parsed;
             }
