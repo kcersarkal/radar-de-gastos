@@ -1349,20 +1349,23 @@
     <!-- ========================================== -->
     <section class="tab-pane active" id="tabHome" role="tabpanel" aria-labelledby="deskTabHome">
 
+      <!-- INPUT INVISÍVEL PARA SELEÇÃO DIRETA DE MÊS -->
+      <input type="month" id="monthPickerInput" style="position: absolute; opacity: 0; width: 0; height: 0; pointer-events: none;" onchange="onMonthPickerChange(event)" aria-hidden="true">
+
       <!-- NAVEGADOR DE PERÍODO -->
       <nav class="period-navigator" aria-label="Navegação por mês">
-        <button class="period-arrow" onclick="shiftMonth(-1)" aria-label="Mês anterior">
+        <button type="button" class="period-arrow" onclick="shiftMonth(-1)" aria-label="Mês anterior" title="Mês anterior">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="m15 18-6-6 6-6"></path>
           </svg>
         </button>
 
         <div class="period-info">
-          <span class="period-label" id="currentPeriodDisplay">--</span>
-          <button class="period-today-btn" id="todayBtn" onclick="jumpToCurrentMonth()">Mês atual</button>
+          <span class="period-label" id="currentPeriodDisplay" onclick="openMonthPicker()" style="cursor: pointer;" title="Clique para selecionar outro mês">--</span>
+          <button type="button" class="period-today-btn" id="todayBtn" onclick="jumpToCurrentMonth()">Mês atual</button>
         </div>
 
-        <button class="period-arrow" onclick="shiftMonth(1)" aria-label="Próximo mês">
+        <button type="button" class="period-arrow" onclick="shiftMonth(1)" aria-label="Próximo mês" title="Próximo mês">
           <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
             <path d="m9 18 6-6-6-6"></path>
           </svg>
@@ -1529,9 +1532,32 @@
     <!-- ========================================== -->
     <section class="tab-pane" id="tabDebts" role="tabpanel" aria-labelledby="deskTabDebts">
 
+      <!-- NAVEGADOR DE PERÍODO DA ABA DÍVIDAS -->
+      <nav class="period-navigator" id="debtsPeriodNavigator" aria-label="Navegação por mês das dívidas">
+        <button type="button" class="period-arrow" onclick="shiftMonth(-1)" aria-label="Mês anterior" title="Mês anterior">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m15 18-6-6 6-6"></path>
+          </svg>
+        </button>
+
+        <div class="period-info">
+          <span class="period-label" id="debtsPeriodDisplay" onclick="openMonthPicker()" style="cursor: pointer;" title="Clique para selecionar outro mês">--</span>
+          <button type="button" class="period-today-btn" id="debtsTodayBtn" onclick="jumpToCurrentMonth()">Mês atual</button>
+        </div>
+
+        <button type="button" class="period-arrow" onclick="shiftMonth(1)" aria-label="Próximo mês" title="Próximo mês">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+            <path d="m9 18 6-6-6-6"></path>
+          </svg>
+        </button>
+      </nav>
+
       <div class="card-box" style="margin-bottom: 16px;">
-        <h2 class="section-heading">Todas as dívidas</h2>
-        <p class="section-desc">Consulte suas despesas com filtros por status e ordenamento customizado.</p>
+        <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 6px;">
+          <h2 class="section-heading" style="margin-bottom: 0;">Todas as dívidas</h2>
+          <span class="tabular-num" id="debtsTotalSummaryBadge" style="font-size: 13px; font-weight: 600; color: var(--text-1); background: var(--surface-2); padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border);">Total: R$ 0,00</span>
+        </div>
+        <p class="section-desc">Consulte suas despesas do período ou histórico completo com filtros e ordenamento.</p>
 
         <!-- FILTROS: ESCOPO, STATUS E ORDENAÇÃO -->
         <div class="filter-bars-group">
@@ -2386,6 +2412,13 @@
         viewMonth = 11;
         viewYear--;
       }
+      if (debtsScope === 'all') {
+        debtsScope = 'month';
+        const sMonth = document.getElementById('scopeMonthBtn');
+        const sAll = document.getElementById('scopeAllBtn');
+        if (sMonth) sMonth.classList.add('active');
+        if (sAll) sAll.classList.remove('active');
+      }
       autoSyncRecurringExpenses(viewYear, viewMonth);
       updateInstallmentHint();
       renderView();
@@ -2394,9 +2427,48 @@
     function jumpToCurrentMonth() {
       viewYear = systemYear;
       viewMonth = systemMonth;
+      if (debtsScope === 'all') {
+        debtsScope = 'month';
+        const sMonth = document.getElementById('scopeMonthBtn');
+        const sAll = document.getElementById('scopeAllBtn');
+        if (sMonth) sMonth.classList.add('active');
+        if (sAll) sAll.classList.remove('active');
+      }
       autoSyncRecurringExpenses(viewYear, viewMonth);
       updateInstallmentHint();
       renderView();
+    }
+
+    function openMonthPicker() {
+      const picker = document.getElementById('monthPickerInput');
+      if (!picker) return;
+      picker.value = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
+      if (typeof picker.showPicker === 'function') {
+        try {
+          picker.showPicker();
+          return;
+        } catch (e) {}
+      }
+      picker.click();
+    }
+
+    function onMonthPickerChange(event) {
+      if (!event.target.value) return;
+      const parts = event.target.value.split('-');
+      if (parts.length === 2) {
+        viewYear = parseInt(parts[0], 10);
+        viewMonth = parseInt(parts[1], 10) - 1;
+        if (debtsScope === 'all') {
+          debtsScope = 'month';
+          const sMonth = document.getElementById('scopeMonthBtn');
+          const sAll = document.getElementById('scopeAllBtn');
+          if (sMonth) sMonth.classList.add('active');
+          if (sAll) sAll.classList.remove('active');
+        }
+        autoSyncRecurringExpenses(viewYear, viewMonth);
+        updateInstallmentHint();
+        renderView();
+      }
     }
 
     /* SUBMISSÃO DE DESPESA */
@@ -2610,9 +2682,32 @@
       renderDebtsList();
     }
 
+    function syncPeriodDisplays() {
+      const labelText = `${monthNames[viewMonth]} de ${viewYear}`;
+      const isDifferent = (viewYear !== systemYear || viewMonth !== systemMonth);
+
+      const labelHome = document.getElementById('currentPeriodDisplay');
+      if (labelHome) labelHome.textContent = labelText;
+
+      const labelDebts = document.getElementById('debtsPeriodDisplay');
+      if (labelDebts) labelDebts.textContent = labelText;
+
+      const btnHome = document.getElementById('todayBtn');
+      if (btnHome) btnHome.classList.toggle('visible', isDifferent);
+
+      const btnDebts = document.getElementById('debtsTodayBtn');
+      if (btnDebts) btnDebts.classList.toggle('visible', isDifferent);
+
+      const picker = document.getElementById('monthPickerInput');
+      if (picker) {
+        picker.value = `${viewYear}-${String(viewMonth + 1).padStart(2, '0')}`;
+      }
+    }
+
     /* RENDERIZAÇÃO GERAL */
     function renderView() {
       autoSyncRecurringExpenses(viewYear, viewMonth);
+      syncPeriodDisplays();
       renderHomeSummary();
       renderDebtsList();
       renderCardsList();
@@ -2620,17 +2715,7 @@
 
     /* RENDERIZAÇÃO DO RESUMO DA ABA 1 (TOTAL DO VALOR) */
     function renderHomeSummary() {
-      const periodLabel = document.getElementById('currentPeriodDisplay');
-      if (periodLabel) periodLabel.textContent = `${monthNames[viewMonth]} de ${viewYear}`;
-
-      const todayBtn = document.getElementById('todayBtn');
-      if (todayBtn) {
-        if (viewYear !== systemYear || viewMonth !== systemMonth) {
-          todayBtn.classList.add('visible');
-        } else {
-          todayBtn.classList.remove('visible');
-        }
-      }
+      syncPeriodDisplays();
 
       const key = getPeriodKey();
       const list = expensesDB[key] || [];
@@ -2665,6 +2750,8 @@
       const container = document.getElementById('debtsContainer');
       if (!container) return;
 
+      syncPeriodDisplays();
+
       let list = [];
       const currentKey = getPeriodKey();
 
@@ -2678,12 +2765,28 @@
         });
       }
 
+      // CONTAGENS DO FILTRO DE STATUS
+      const countAllEl = document.getElementById('countAll');
+      const countPendingEl = document.getElementById('countPending');
+      const countPaidEl = document.getElementById('countPaid');
+      if (countAllEl) countAllEl.textContent = list.length;
+      if (countPendingEl) countPendingEl.textContent = list.filter(item => !item.isPaid).length;
+      if (countPaidEl) countPaidEl.textContent = list.filter(item => item.isPaid).length;
+
       // APLICAÇÃO DE FILTRO DE STATUS
       let filtered = list;
       if (debtsFilter === 'pending') {
         filtered = list.filter(item => !item.isPaid);
       } else if (debtsFilter === 'paid') {
         filtered = list.filter(item => item.isPaid);
+      }
+
+      // ATUALIZAÇÃO DO BADGE DE TOTAL DA ABA DÍVIDAS
+      const totalBadge = document.getElementById('debtsTotalSummaryBadge');
+      if (totalBadge) {
+        let debtsTotal = 0;
+        filtered.forEach(it => debtsTotal += it.amount);
+        totalBadge.textContent = `Total: ${formatBRL(debtsTotal)}`;
       }
 
       // APLICAÇÃO DE ORDENAMENTO (REGRA DO USUÁRIO: ORDENAR POR CARTÃO)
