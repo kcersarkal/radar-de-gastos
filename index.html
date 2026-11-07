@@ -860,6 +860,56 @@
       color: var(--accent);
     }
 
+    .sort-segmented-control {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 3px;
+      background: var(--surface-2);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 3px;
+    }
+
+    @media (min-width: 600px) {
+      .sort-segmented-control {
+        grid-template-columns: repeat(4, 1fr);
+      }
+    }
+
+    .tx-card-group-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 10px 16px;
+      background: var(--surface-2);
+      border-bottom: 1px solid var(--border);
+      border-top: 1px solid var(--border);
+    }
+
+    .tx-card-group-header:first-child {
+      border-top: none;
+    }
+
+    .tx-card-group-title {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+      font-size: 13px;
+      font-weight: 600;
+      color: var(--text);
+    }
+
+    .tx-card-group-title svg {
+      color: var(--accent);
+      flex-shrink: 0;
+    }
+
+    .tx-card-group-subtotal {
+      font-size: 12px;
+      font-weight: 500;
+      color: var(--text-2);
+    }
+
     /* LISTA DE TRANSAÇÕES / DÍVIDAS (REGRA 7) */
     .transactions-card {
       background: var(--surface);
@@ -1474,9 +1524,9 @@
 
       <div class="card-box" style="margin-bottom: 16px;">
         <h2 class="section-heading">Todas as dívidas</h2>
-        <p class="section-desc">Lançamentos ordenados por data, com os mais recentes sempre no topo.</p>
+        <p class="section-desc">Consulte suas despesas com filtros por status e ordenamento customizado.</p>
 
-        <!-- FILTROS DUPLOS: ESCOPO E STATUS -->
+        <!-- FILTROS: ESCOPO, STATUS E ORDENAÇÃO -->
         <div class="filter-bars-group">
           <!-- SELETOR DE ESCOPO: MÊS ATUAL OU HISTÓRICO COMPLETO -->
           <div class="segmented-control" role="tablist">
@@ -1498,6 +1548,22 @@
             </button>
             <button class="segmented-btn" id="filterPaidBtn" onclick="applyDebtsFilter('paid')">
               Liquidadas <span class="segmented-count tabular-num" id="countPaid">0</span>
+            </button>
+          </div>
+
+          <!-- SELETOR DE ORDENAÇÃO -->
+          <div class="sort-segmented-control" role="tablist" aria-label="Ordenar lançamentos">
+            <button class="segmented-btn active" id="sortCardBtn" onclick="setDebtsSort('card')">
+              Por cartão
+            </button>
+            <button class="segmented-btn" id="sortDateBtn" onclick="setDebtsSort('date_desc')">
+              Mais recentes
+            </button>
+            <button class="segmented-btn" id="sortValueDescBtn" onclick="setDebtsSort('value_desc')">
+              Maior valor
+            </button>
+            <button class="segmented-btn" id="sortValueAscBtn" onclick="setDebtsSort('value_asc')">
+              Menor valor
             </button>
           </div>
         </div>
@@ -1699,6 +1765,7 @@
     const THEME_STORAGE_KEY = 'radar_despesas_theme_v2';
     const ACTIVE_TAB_KEY = 'radar_despesas_active_tab_v2';
     const CANCELLED_RECURRING_KEY = 'radar_despesas_cancelled_recurring_v2';
+    const DEBTS_SORT_KEY = 'radar_despesas_debts_sort_v2';
 
     let expensesDB = {};
     let cardsDB = [];
@@ -1706,6 +1773,7 @@
     let currentBillingType = 'single';
     let debtsScope = 'month'; // 'month' ou 'all'
     let debtsFilter = 'all';  // 'all', 'pending', 'paid'
+    let debtsSort = localStorage.getItem(DEBTS_SORT_KEY) || 'card'; // 'card', 'date_desc', 'value_desc', 'value_asc'
     let currentActiveTab = 'home';
 
     const monthNames = [
@@ -1759,6 +1827,7 @@
       setupCurrencyInputMask();
       updateInstallmentHint();
       autoSyncRecurringExpenses(viewYear, viewMonth);
+      syncSortButtonsVisual();
 
       const savedTab = localStorage.getItem(ACTIVE_TAB_KEY) || 'home';
       switchTab(savedTab, false);
@@ -2451,6 +2520,26 @@
       renderDebtsList();
     }
 
+    /* ORDENAÇÃO DA ABA DÍVIDAS */
+    function syncSortButtonsVisual() {
+      const btnCard = document.getElementById('sortCardBtn');
+      const btnDate = document.getElementById('sortDateBtn');
+      const btnValDesc = document.getElementById('sortValueDescBtn');
+      const btnValAsc = document.getElementById('sortValueAscBtn');
+
+      if (btnCard) btnCard.classList.toggle('active', debtsSort === 'card');
+      if (btnDate) btnDate.classList.toggle('active', debtsSort === 'date_desc');
+      if (btnValDesc) btnValDesc.classList.toggle('active', debtsSort === 'value_desc');
+      if (btnValAsc) btnValAsc.classList.toggle('active', debtsSort === 'value_asc');
+    }
+
+    function setDebtsSort(sortType) {
+      debtsSort = sortType;
+      localStorage.setItem(DEBTS_SORT_KEY, sortType);
+      syncSortButtonsVisual();
+      renderDebtsList();
+    }
+
     /* RENDERIZAÇÃO GERAL */
     function renderView() {
       autoSyncRecurringExpenses(viewYear, viewMonth);
@@ -2519,34 +2608,44 @@
         });
       }
 
-      // ORDENAÇÃO: AS MAIS RECENTES SEMPRE NO TOPO (REGRA DO USUÁRIO)
-      list.sort((a, b) => {
-        const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
-        const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
-        return timeB - timeA;
-      });
-
-      // Atualiza contadores
-      let countPaid = 0;
-      let countPending = 0;
-      list.forEach(item => {
-        if (item.isPaid) countPaid++;
-        else countPending++;
-      });
-
-      const countAllEl = document.getElementById('countAll');
-      const countPendingEl = document.getElementById('countPending');
-      const countPaidEl = document.getElementById('countPaid');
-      if (countAllEl) countAllEl.textContent = list.length;
-      if (countPendingEl) countPendingEl.textContent = countPending;
-      if (countPaidEl) countPaidEl.textContent = countPaid;
-
-      // Aplica filtro de status
+      // APLICAÇÃO DE FILTRO DE STATUS
       let filtered = list;
       if (debtsFilter === 'pending') {
         filtered = list.filter(item => !item.isPaid);
       } else if (debtsFilter === 'paid') {
         filtered = list.filter(item => item.isPaid);
+      }
+
+      // APLICAÇÃO DE ORDENAMENTO (REGRA DO USUÁRIO: ORDENAR POR CARTÃO)
+      if (debtsSort === 'card') {
+        filtered.sort((a, b) => {
+          const hasCardA = !!(a.cardIssuer || a.cardNickname);
+          const hasCardB = !!(b.cardIssuer || b.cardNickname);
+
+          if (hasCardA && !hasCardB) return -1;
+          if (!hasCardA && hasCardB) return 1;
+
+          if (hasCardA && hasCardB) {
+            const nameA = (a.cardIssuer || a.cardNickname || '').toLowerCase();
+            const nameB = (b.cardIssuer || b.cardNickname || '').toLowerCase();
+            const comp = nameA.localeCompare(nameB);
+            if (comp !== 0) return comp;
+          }
+
+          const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+          const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+          return timeB - timeA;
+        });
+      } else if (debtsSort === 'date_desc') {
+        filtered.sort((a, b) => {
+          const timeA = a.timestamp ? new Date(a.timestamp).getTime() : 0;
+          const timeB = b.timestamp ? new Date(b.timestamp).getTime() : 0;
+          return timeB - timeA;
+        });
+      } else if (debtsSort === 'value_desc') {
+        filtered.sort((a, b) => b.amount - a.amount);
+      } else if (debtsSort === 'value_asc') {
+        filtered.sort((a, b) => a.amount - b.amount);
       }
 
       if (filtered.length === 0) {
@@ -2572,77 +2671,135 @@
         return;
       }
 
-      container.innerHTML = filtered.map(item => {
-        const isCard = !!item.cardIssuer;
+      // RENDERIZAÇÃO AGRUPADA QUANDO ORDENADO POR CARTÃO
+      if (debtsSort === 'card') {
+        const groups = [];
+        let currentGroupKey = null;
+        let currentGroupItems = [];
 
-        // Formatação legível da data
-        let formattedDateStr = '';
-        if (item.timestamp) {
-          const d = new Date(item.timestamp);
-          formattedDateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
-        }
-
-        // Formatação do período do mês se estiver no modo histórico
-        let periodMetaStr = '';
-        if (debtsScope === 'all' && item.periodKey) {
-          const parts = item.periodKey.split('-');
-          if (parts.length === 2) {
-            const mIdx = parseInt(parts[1], 10) - 1;
-            periodMetaStr = `${monthNames[mIdx].substr(0, 3)}/${parts[0].substr(2, 2)}`;
+        filtered.forEach(item => {
+          const groupKey = (item.cardIssuer || item.cardNickname) ? (item.cardIssuer || item.cardNickname) : '__none__';
+          if (groupKey !== currentGroupKey) {
+            if (currentGroupItems.length > 0) {
+              groups.push({ key: currentGroupKey, items: currentGroupItems });
+            }
+            currentGroupKey = groupKey;
+            currentGroupItems = [item];
+          } else {
+            currentGroupItems.push(item);
           }
+        });
+        if (currentGroupItems.length > 0) {
+          groups.push({ key: currentGroupKey, items: currentGroupItems });
         }
 
-        return `
-          <div class="transaction-row ${item.isPaid ? 'paid' : ''}">
-            <div class="tx-left">
-              <div class="tx-icon-box ${isCard ? '' : 'non-card'}" aria-hidden="true">
-                ${isCard ? `
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                    <rect width="20" height="14" x="2" y="5" rx="2"></rect>
-                    <line x1="2" x2="22" y1="10" y2="10"></line>
-                  </svg>
-                ` : `
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        let htmlOut = '';
+        groups.forEach(grp => {
+          const isNone = grp.key === '__none__';
+          const groupTitle = isNone ? 'Sem cartão (Boleto, Pix ou Dinheiro)' : grp.key;
+          let subtotal = 0;
+          grp.items.forEach(it => subtotal += it.amount);
+
+          htmlOut += `
+            <div class="tx-card-group-header">
+              <div class="tx-card-group-title">
+                ${isNone ? `
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"></path>
                     <path d="M16 8h-8"></path>
                     <path d="M16 12h-8"></path>
                   </svg>
+                ` : `
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                    <rect width="20" height="14" x="2" y="5" rx="2"></rect>
+                    <line x1="2" x2="22" y1="10" y2="10"></line>
+                  </svg>
                 `}
+                <span>${escapeHTML(groupTitle)}</span>
               </div>
+              <span class="tx-card-group-subtotal tabular-num">${grp.items.length} ${grp.items.length === 1 ? 'item' : 'itens'} • ${formatBRL(subtotal)}</span>
+            </div>
+          `;
 
-              <div class="tx-info">
-                <span class="tx-title" title="${escapeHTML(item.title)}">${escapeHTML(item.title)}</span>
-                <div class="tx-meta">
-                  ${isCard ? `<span class="tx-badge card-issuer">${escapeHTML(item.cardIssuer)}</span>` : ''}
-                  ${item.isInstallment ? `<span class="tx-badge installment tabular-num">${item.currentInstallment} de ${item.totalInstallments}</span>` : ''}
-                  ${item.isRecurring ? `<span class="tx-badge">Fixa</span>` : ''}
-                  ${item.billingType === 'credit_single' ? `<span class="tx-badge">Crédito à vista</span>` : ''}
-                  ${periodMetaStr ? `<span class="tx-badge date-badge tabular-num">${periodMetaStr}</span>` : ''}
-                  ${formattedDateStr ? `<span class="tx-badge date-badge tabular-num">${formattedDateStr}</span>` : ''}
-                </div>
-              </div>
+          grp.items.forEach(item => {
+            htmlOut += renderTransactionRow(item);
+          });
+        });
+
+        container.innerHTML = htmlOut;
+      } else {
+        container.innerHTML = filtered.map(item => renderTransactionRow(item)).join('');
+      }
+    }
+
+    function renderTransactionRow(item) {
+      const isCard = !!item.cardIssuer;
+
+      let formattedDateStr = '';
+      if (item.timestamp) {
+        const d = new Date(item.timestamp);
+        formattedDateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
+      }
+
+      let periodMetaStr = '';
+      if (debtsScope === 'all' && item.periodKey) {
+        const parts = item.periodKey.split('-');
+        if (parts.length === 2) {
+          const mIdx = parseInt(parts[1], 10) - 1;
+          periodMetaStr = `${monthNames[mIdx].substr(0, 3)}/${parts[0].substr(2, 2)}`;
+        }
+      }
+
+      return `
+        <div class="transaction-row ${item.isPaid ? 'paid' : ''}">
+          <div class="tx-left">
+            <div class="tx-icon-box ${isCard ? '' : 'non-card'}" aria-hidden="true">
+              ${isCard ? `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <rect width="20" height="14" x="2" y="5" rx="2"></rect>
+                  <line x1="2" x2="22" y1="10" y2="10"></line>
+                </svg>
+              ` : `
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M4 2v20l2-1 2 1 2-1 2 1 2-1 2 1 2-1 2 1V2l-2 1-2-1-2 1-2-1-2 1-2-1-2 1Z"></path>
+                  <path d="M16 8h-8"></path>
+                  <path d="M16 12h-8"></path>
+                </svg>
+              `}
             </div>
 
-            <div class="tx-right">
-              <span class="tx-value tabular-num">− ${formatBRL(item.amount)}</span>
-
-              <button class="btn-check-tx" onclick="toggleExpenseStatus('${item.id}', '${item.periodKey}')" aria-label="${item.isPaid ? 'Marcar como pendente' : 'Marcar como quitada'}" title="${item.isPaid ? 'Reabrir despesa' : 'Liquidar despesa'}">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M20 6 9 17l-5-5"></path>
-                </svg>
-              </button>
-
-              <button class="btn-remove-tx" onclick="removeExpense('${item.id}', '${item.periodKey}')" aria-label="Remover registro" title="Excluir">
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M3 6h18"></path>
-                  <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
-                  <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
-                </svg>
-              </button>
+            <div class="tx-info">
+              <span class="tx-title" title="${escapeHTML(item.title)}">${escapeHTML(item.title)}</span>
+              <div class="tx-meta">
+                ${isCard ? `<span class="tx-badge card-issuer">${escapeHTML(item.cardIssuer)}</span>` : ''}
+                ${item.isInstallment ? `<span class="tx-badge installment tabular-num">${item.currentInstallment} de ${item.totalInstallments}</span>` : ''}
+                ${item.isRecurring ? `<span class="tx-badge">Fixa</span>` : ''}
+                ${item.billingType === 'credit_single' ? `<span class="tx-badge">Crédito à vista</span>` : ''}
+                ${periodMetaStr ? `<span class="tx-badge date-badge tabular-num">${periodMetaStr}</span>` : ''}
+                ${formattedDateStr ? `<span class="tx-badge date-badge tabular-num">${formattedDateStr}</span>` : ''}
+              </div>
             </div>
           </div>
-        `;
-      }).join('');
+
+          <div class="tx-right">
+            <span class="tx-value tabular-num">− ${formatBRL(item.amount)}</span>
+
+            <button class="btn-check-tx" onclick="toggleExpenseStatus('${item.id}', '${item.periodKey}')" aria-label="${item.isPaid ? 'Marcar como pendente' : 'Marcar como quitada'}" title="${item.isPaid ? 'Reabrir despesa' : 'Liquidar despesa'}">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M20 6 9 17l-5-5"></path>
+              </svg>
+            </button>
+
+            <button class="btn-remove-tx" onclick="removeExpense('${item.id}', '${item.periodKey}')" aria-label="Remover registro" title="Excluir">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 6h18"></path>
+                <path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"></path>
+                <path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"></path>
+              </svg>
+            </button>
+          </div>
+        </div>
+      `;
     }
 
     /* BACKUP E RESTAURAÇÃO (ABA 4) */
