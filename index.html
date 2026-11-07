@@ -638,9 +638,15 @@
     /* TIPO DE COBRANÇA (SEGMENTED BUTTONS) */
     .billing-options-row {
       display: grid;
-      grid-template-columns: 1fr 1fr 1fr;
+      grid-template-columns: 1fr 1fr;
       gap: 8px;
       margin-top: 6px;
+    }
+
+    @media (min-width: 600px) {
+      .billing-options-row {
+        grid-template-columns: repeat(4, 1fr);
+      }
     }
 
     .billing-option-btn {
@@ -1376,6 +1382,9 @@
             <div class="billing-options-row">
               <button type="button" class="billing-option-btn active" id="btnTypeSingle" onclick="selectBillingType('single')">
                 Pontual
+              </button>
+              <button type="button" class="billing-option-btn" id="btnTypeCreditSingle" onclick="selectBillingType('credit_single')">
+                Crédito à vista
               </button>
               <button type="button" class="billing-option-btn" id="btnTypeRecurring" onclick="selectBillingType('recurring')">
                 Fixa mensal
@@ -2162,14 +2171,16 @@
       currentBillingType = type;
 
       const btnSingle = document.getElementById('btnTypeSingle');
+      const btnCreditSingle = document.getElementById('btnTypeCreditSingle');
       const btnRecurring = document.getElementById('btnTypeRecurring');
       const btnInstallments = document.getElementById('btnTypeInstallments');
       const panel = document.getElementById('installmentsPanel');
       const amountLabel = document.getElementById('amountLabel');
 
-      btnSingle.classList.toggle('active', type === 'single');
-      btnRecurring.classList.toggle('active', type === 'recurring');
-      btnInstallments.classList.toggle('active', type === 'installments');
+      if (btnSingle) btnSingle.classList.toggle('active', type === 'single');
+      if (btnCreditSingle) btnCreditSingle.classList.toggle('active', type === 'credit_single');
+      if (btnRecurring) btnRecurring.classList.toggle('active', type === 'recurring');
+      if (btnInstallments) btnInstallments.classList.toggle('active', type === 'installments');
 
       if (type === 'installments') {
         panel.classList.add('active');
@@ -2178,6 +2189,13 @@
       } else {
         panel.classList.remove('active');
         amountLabel.textContent = 'Valor';
+      }
+
+      if (type === 'credit_single') {
+        const cardSelect = document.getElementById('expenseCard');
+        if (cardSelect && !cardSelect.value && cardsDB.length > 0) {
+          cardSelect.value = cardsDB[0].id;
+        }
       }
     }
 
@@ -2348,6 +2366,7 @@
           cardId,
           cardIssuer,
           cardNickname,
+          billingType: currentBillingType,
           isRecurring: isRec,
           isInstallment: false,
           isPaid: false,
@@ -2361,7 +2380,14 @@
           autoSyncRecurringExpenses(viewYear, viewMonth);
         }
 
-        showToast(isRec ? 'Despesa fixa cadastrada e propagada para os meses seguintes' : 'Despesa adicionada com sucesso');
+        let toastMsg = 'Despesa adicionada com sucesso';
+        if (isRec) {
+          toastMsg = 'Despesa fixa cadastrada e propagada para os meses seguintes';
+        } else if (currentBillingType === 'credit_single') {
+          toastMsg = 'Compra em crédito à vista adicionada com sucesso';
+        }
+
+        showToast(toastMsg);
       }
 
       titleEl.value = '';
@@ -2590,6 +2616,7 @@
                   ${isCard ? `<span class="tx-badge card-issuer">${escapeHTML(item.cardIssuer)}</span>` : ''}
                   ${item.isInstallment ? `<span class="tx-badge installment tabular-num">${item.currentInstallment} de ${item.totalInstallments}</span>` : ''}
                   ${item.isRecurring ? `<span class="tx-badge">Fixa</span>` : ''}
+                  ${item.billingType === 'credit_single' ? `<span class="tx-badge">Crédito à vista</span>` : ''}
                   ${periodMetaStr ? `<span class="tx-badge date-badge tabular-num">${periodMetaStr}</span>` : ''}
                   ${formattedDateStr ? `<span class="tx-badge date-badge tabular-num">${formattedDateStr}</span>` : ''}
                 </div>
