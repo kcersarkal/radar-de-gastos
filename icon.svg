@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <defs>
+    <!-- Background Gradient Deep Petrol Teal -->
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#1A424B" />
+      <stop offset="45%" stop-color="#14363D" />
+      <stop offset="100%" stop-color="#0B1E22" />
+    </linearGradient>
+
+    <!-- Radar Scope Glow -->
+    <radialGradient id="radarAmbient" cx="50%" cy="50%" r="50%">
+      <stop offset="0%" stop-color="#F3A03B" stop-opacity="0.16" />
+      <stop offset="45%" stop-color="#4FD1C5" stop-opacity="0.08" />
+      <stop offset="100%" stop-color="#0B1E22" stop-opacity="0" />
+    </radialGradient>
+
+    <!-- Radar Sweep Beam (Pie Wedge) -->
+    <linearGradient id="sweepGrad" x1="0%" y1="100%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#F3A03B" stop-opacity="0" />
+      <stop offset="50%" stop-color="#F3A03B" stop-opacity="0.10" />
+      <stop offset="85%" stop-color="#F3A03B" stop-opacity="0.28" />
+      <stop offset="100%" stop-color="#F3A03B" stop-opacity="0.55" />
+    </linearGradient>
+
+    <!-- Amber Glow Filter -->
+    <filter id="glowAmber" x="-30%" y="-30%" width="160%" height="160%">
+      <feGaussianBlur stdDeviation="5" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+
+    <filter id="pulseGlow" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="8" result="blur" />
+      <feComposite in="SourceGraphic" in2="blur" operator="over" />
+    </filter>
+  </defs>
+
+  <!-- Squircle App Container -->
+  <rect width="512" height="512" rx="114" fill="url(#bgGrad)" />
+  <rect width="512" height="512" rx="114" fill="none" stroke="rgba(255, 255, 255, 0.12)" stroke-width="2.5" />
+
+  <!-- Ambient Radar Display Glow -->
+  <circle cx="256" cy="256" r="210" fill="url(#radarAmbient)" />
+
+  <!-- Radar Scope Body -->
+  <circle cx="256" cy="256" r="190" fill="#0D2429" fill-opacity="0.75" stroke="rgba(79, 209, 197, 0.25)" stroke-width="2" />
+
+  <!-- Radar Range Concentric Rings -->
+  <circle cx="256" cy="256" r="64" fill="none" stroke="rgba(255, 255, 255, 0.14)" stroke-width="1.8" stroke-dasharray="4 6" />
+  <circle cx="256" cy="256" r="128" fill="none" stroke="rgba(79, 209, 197, 0.28)" stroke-width="2" />
+  <circle cx="256" cy="256" r="190" fill="none" stroke="#F3A03B" stroke-opacity="0.45" stroke-width="2.5" />
+
+  <!-- Scope Perimeter Cardinal Notches (Aviation / Tactical Precision) -->
+  <line x1="256" y1="58" x2="256" y2="72" stroke="#F3A03B" stroke-width="3" stroke-linecap="round" />
+  <line x1="256" y1="440" x2="256" y2="454" stroke="#F3A03B" stroke-width="3" stroke-linecap="round" />
+  <line x1="58" y1="256" x2="72" y2="256" stroke="#F3A03B" stroke-width="3" stroke-linecap="round" />
+  <line x1="440" y1="256" x2="454" y2="256" stroke="#F3A03B" stroke-width="3" stroke-linecap="round" />
+
+  <!-- Radar Crosshairs (Axis Grid) -->
+  <line x1="256" y1="66" x2="256" y2="446" stroke="rgba(255, 255, 255, 0.10)" stroke-width="1.8" />
+  <line x1="66" y1="256" x2="446" y2="256" stroke="rgba(255, 255, 256, 0.10)" stroke-width="1.8" />
+
+  <!-- Diagonal Compass Coordinates (Subtle dotted guides) -->
+  <line x1="122" y1="122" x2="390" y2="390" stroke="rgba(255, 255, 255, 0.06)" stroke-width="1.5" stroke-dasharray="3 8" />
+  <line x1="122" y1="390" x2="390" y2="122" stroke="rgba(255, 255, 255, 0.06)" stroke-width="1.5" stroke-dasharray="3 8" />
+
+  <!-- Radar Sweep Beam (45 Degree Wedge) -->
+  <path d="M 256 256 L 390 122 A 190 190 0 0 0 256 66 Z" fill="url(#sweepGrad)" />
+  <!-- Leading Edge Scanner Line with amber glow -->
+  <line x1="256" y1="256" x2="390" y2="122" stroke="#F3A03B" stroke-width="3.5" stroke-linecap="round" filter="url(#glowAmber)" />
+
+  <!-- Tracked Expense Blip 1: Highlighted by radar sweep (45° at 145px) -->
+  <circle cx="358" cy="154" r="18" fill="none" stroke="#F3A03B" stroke-width="2" stroke-opacity="0.45" filter="url(#pulseGlow)" />
+  <circle cx="358" cy="154" r="7" fill="#F3A03B" filter="url(#glowAmber)" />
+  <circle cx="358" cy="154" r="3" fill="#FFFFFF" />
+
+  <!-- Tracked Expense Blip 2: (195° at 115px) - Cyan semantic pulse -->
+  <circle cx="145" cy="285" r="5" fill="#4FD1C5" />
+  <circle cx="145" cy="285" r="11" fill="none" stroke="#4FD1C5" stroke-opacity="0.35" stroke-width="1.5" />
+
+  <!-- Tracked Expense Blip 3: (315° at 155px) - Amber pending pulse -->
+  <circle cx="365" cy="365" r="4.5" fill="#F3A03B" fill-opacity="0.8" />
+
+  <!-- Radar Center Epicenter Node -->
+  <circle cx="256" cy="256" r="37" fill="#14363D" stroke="#F3A03B" stroke-width="3.5" filter="url(#glowAmber)" />
+  <circle cx="256" cy="256" r="31" fill="#0F292E" />
+
+  <!-- Elegant Financial Currency Emblem ($) in center of radar -->
+  <!-- Top & Bottom vertical spine lines -->
+  <line x1="256" y1="235" x2="256" y2="242" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" />
+  <line x1="256" y1="270" x2="256" y2="277" stroke="#FFFFFF" stroke-width="3.2" stroke-linecap="round" />
+  <!-- S-Curve Body -->
+  <path d="M 264 245 C 264 241.5 260.5 239 256 239 C 251.5 239 248 241.5 248 245.5 C 248 249 251 251.5 255.5 253.5 L 256.5 254 C 261.5 256 264.5 258.5 264.5 263 C 264.5 267.5 260.5 270.5 256 270.5 C 251.5 270.5 247.5 267.5 247.5 263.5"
+        fill="none"
+        stroke="#FFFFFF"
+        stroke-width="3.5"
+        stroke-linecap="round"
+        stroke-linejoin="round" />
+</svg>

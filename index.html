@@ -18,6 +18,13 @@
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
   <meta name="apple-mobile-web-app-title" content="Radar Gastos">
 
+  <!-- ÍCONES OFICIAIS E MANIFEST -->
+  <link rel="icon" type="image/svg+xml" href="favicon.svg">
+  <link rel="icon" type="image/png" sizes="192x192" href="icon-192.png">
+  <link rel="icon" type="image/png" sizes="512x512" href="icon-512.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+  <link rel="manifest" href="manifest.json">
+
   <!-- GOOGLE FONTS (INTER) -->
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -1516,9 +1523,20 @@
     <header class="app-header">
       <div class="brand-group">
         <h1 class="brand-title">
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--primary-amber);">
-            <path d="M12 2v20"></path>
-            <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" class="brand-radar-icon" aria-hidden="true" style="color: var(--text);">
+            <!-- Círculos de alcance do radar -->
+            <circle cx="12" cy="12" r="10" stroke="currentColor" stroke-opacity="0.3"></circle>
+            <circle cx="12" cy="12" r="6" stroke="currentColor" stroke-opacity="0.5"></circle>
+            <!-- Notches de precisão -->
+            <line x1="12" y1="2" x2="12" y2="4" stroke="currentColor"></line>
+            <line x1="12" y1="20" x2="12" y2="22" stroke="currentColor"></line>
+            <line x1="2" y1="12" x2="4" y2="12" stroke="currentColor"></line>
+            <line x1="20" y1="12" x2="22" y2="12" stroke="currentColor"></line>
+            <!-- Feixe de varredura com ponto de detecção em âmbar -->
+            <line x1="12" y1="12" x2="18.5" y2="5.5" stroke="var(--primary-amber)" stroke-width="2.2"></line>
+            <circle cx="18.5" cy="5.5" r="2" fill="var(--primary-amber)"></circle>
+            <!-- Alvo central do radar -->
+            <circle cx="12" cy="12" r="2.2" fill="var(--primary-amber)"></circle>
           </svg>
           <span>Radar de <span class="brand-highlight">Gastos</span></span>
         </h1>
