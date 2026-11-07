@@ -1416,14 +1416,21 @@
             </div>
           </div>
 
-          <div class="input-field-group" style="margin-top: 12px;">
-            <div class="field-label-row">
-              <label class="field-label" for="expenseCard">Cartão utilizado</label>
-              <button type="button" class="btn-text" onclick="switchTab('cards')">Gerenciar cartões</button>
+          <div class="field-row" style="margin-top: 12px;">
+            <div class="input-field-group">
+              <div class="field-label-row">
+                <label class="field-label" for="expenseCard">Cartão utilizado</label>
+                <button type="button" class="btn-text" onclick="switchTab('cards')">Gerenciar cartões</button>
+              </div>
+              <select id="expenseCard" class="select-input">
+                <!-- Preenchido dinamicamente via JS -->
+              </select>
             </div>
-            <select id="expenseCard" class="select-input">
-              <!-- Preenchido dinamicamente via JS -->
-            </select>
+
+            <div class="input-field-group">
+              <label class="field-label" for="expenseDueDay">Dia de vencimento (opcional)</label>
+              <input type="number" id="expenseDueDay" class="input-text tabular-num" placeholder="Exemplo: 10" min="1" max="31">
+            </div>
           </div>
 
           <!-- SELEÇÃO DA NATUREZA DA DESPESA -->
@@ -1584,7 +1591,7 @@
       <!-- FORMULÁRIO DE CADASTRO DE CARTÃO -->
       <div class="card-box">
         <h2 class="section-heading">Cadastrar novo cartão</h2>
-        <p class="section-desc">Vincule seus cartões para organizar as despesas por prestadora.</p>
+        <p class="section-desc">Vincule seus cartões e dias de vencimento para organizar as despesas por prestadora.</p>
 
         <form id="cardForm" onsubmit="submitNewCard(event)" style="display: flex; flex-direction: column; gap: 12px;">
           <div class="field-row">
@@ -1597,6 +1604,14 @@
               <label class="field-label" for="cardIssuer">Nome da prestadora / banco</label>
               <input type="text" id="cardIssuer" class="input-text" placeholder="Exemplo: Inter, Nubank, Itaú, Bradesco" required autocomplete="off">
             </div>
+          </div>
+
+          <div class="input-field-group">
+            <label class="field-label" for="cardDueDay">Dia de vencimento da fatura</label>
+            <input type="number" id="cardDueDay" class="input-text tabular-num" placeholder="Exemplo: 10" min="1" max="31">
+            <span style="font-size: 11px; color: var(--text-3);">
+              Preenche automaticamente o vencimento de compras lançadas neste cartão.
+            </span>
           </div>
 
           <button type="submit" class="btn-primary" style="margin-top: 6px;">
@@ -1824,6 +1839,7 @@
       setupTheme();
       loadDatabase();
       loadCards();
+      setupCardSelectionListener();
       setupCurrencyInputMask();
       updateInstallmentHint();
       autoSyncRecurringExpenses(viewYear, viewMonth);
@@ -2015,6 +2031,7 @@
                 cardId: item.cardId || '',
                 cardIssuer: item.cardIssuer || null,
                 cardNickname: item.cardNickname || null,
+                dueDay: item.dueDay || null,
                 startMonths: pMonths
               });
             } else {
@@ -2070,6 +2087,7 @@
               cardId: rec.cardId,
               cardIssuer: rec.cardIssuer,
               cardNickname: rec.cardNickname,
+              dueDay: rec.dueDay || null,
               isRecurring: true,
               isInstallment: false,
               isPaid: false,
@@ -2103,13 +2121,13 @@
           cardsDB = JSON.parse(raw);
         } else {
           cardsDB = [
-            { id: 'card_inter', nickname: 'Meu Cartão Inter', issuer: 'Inter' }
+            { id: 'card_inter', nickname: 'Meu Cartão Inter', issuer: 'Inter', dueDay: 10 }
           ];
           localStorage.setItem(CARDS_KEY, JSON.stringify(cardsDB));
         }
       } catch (e) {
         cardsDB = [
-          { id: 'card_inter', nickname: 'Meu Cartão Inter', issuer: 'Inter' }
+          { id: 'card_inter', nickname: 'Meu Cartão Inter', issuer: 'Inter', dueDay: 10 }
         ];
       }
       populateCardsSelect();
@@ -2130,7 +2148,7 @@
       select.innerHTML = `
         <option value="">Sem cartão (Boleto, Pix ou Dinheiro)</option>
         ${cardsDB.map(card => `
-          <option value="${card.id}">${escapeHTML(card.issuer)} · ${escapeHTML(card.nickname)}</option>
+          <option value="${card.id}">${escapeHTML(card.issuer)} · ${escapeHTML(card.nickname)}${card.dueDay ? ` (Venc. dia ${card.dueDay})` : ''}</option>
         `).join('')}
       `;
 
@@ -2138,6 +2156,10 @@
         select.value = previousValue;
       } else if (cardsDB.length > 0) {
         select.value = cardsDB[0].id;
+        const dueDayEl = document.getElementById('expenseDueDay');
+        if (dueDayEl && !dueDayEl.value && cardsDB[0].dueDay) {
+          dueDayEl.value = cardsDB[0].dueDay;
+        }
       }
     }
 
@@ -2166,7 +2188,7 @@
         <div class="card-item-box">
           <div class="card-item-details">
             <span class="card-item-name">${escapeHTML(card.nickname)}</span>
-            <span class="card-item-issuer">${escapeHTML(card.issuer)}</span>
+            <span class="card-item-issuer">${escapeHTML(card.issuer)}${card.dueDay ? ` • Vencimento dia ${card.dueDay}` : ''}</span>
           </div>
           <button type="button" class="btn-remove-tx" onclick="removeCard('${card.id}')" aria-label="Remover cartão" title="Excluir cartão">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -2183,9 +2205,11 @@
       event.preventDefault();
       const nicknameInput = document.getElementById('cardNickname');
       const issuerInput = document.getElementById('cardIssuer');
+      const dueDayInput = document.getElementById('cardDueDay');
 
       const nickname = nicknameInput.value.trim();
       const issuer = issuerInput.value.trim();
+      const cardDueDay = dueDayInput && dueDayInput.value ? parseInt(dueDayInput.value, 10) : null;
 
       if (!nickname || !issuer) {
         showToast('Preencha o apelido e o nome da prestadora');
@@ -2195,7 +2219,8 @@
       const newCard = {
         id: 'card_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
         nickname,
-        issuer
+        issuer,
+        dueDay: cardDueDay && cardDueDay >= 1 && cardDueDay <= 31 ? cardDueDay : null
       };
 
       cardsDB.push(newCard);
@@ -2204,10 +2229,15 @@
       const expenseCardSelect = document.getElementById('expenseCard');
       if (expenseCardSelect) {
         expenseCardSelect.value = newCard.id;
+        const expenseDueDayEl = document.getElementById('expenseDueDay');
+        if (expenseDueDayEl && newCard.dueDay) {
+          expenseDueDayEl.value = newCard.dueDay;
+        }
       }
 
       nicknameInput.value = '';
       issuerInput.value = '';
+      if (dueDayInput) dueDayInput.value = '';
 
       showToast(`Cartão ${issuer} cadastrado com sucesso`);
     }
@@ -2218,6 +2248,24 @@
         saveCards();
         showToast('Cartão removido');
       }
+    }
+
+    function setupCardSelectionListener() {
+      const select = document.getElementById('expenseCard');
+      if (!select) return;
+      select.addEventListener('change', () => {
+        const cardId = select.value;
+        const dueDayEl = document.getElementById('expenseDueDay');
+        if (!dueDayEl) return;
+        if (!cardId) {
+          dueDayEl.value = '';
+          return;
+        }
+        const card = cardsDB.find(c => c.id === cardId);
+        if (card && card.dueDay) {
+          dueDayEl.value = card.dueDay;
+        }
+      });
     }
 
     /* CONTROLE STEPPER E ATALHOS DE PARCELAS */
@@ -2264,6 +2312,10 @@
         const cardSelect = document.getElementById('expenseCard');
         if (cardSelect && !cardSelect.value && cardsDB.length > 0) {
           cardSelect.value = cardsDB[0].id;
+          const dueDayEl = document.getElementById('expenseDueDay');
+          if (dueDayEl && !dueDayEl.value && cardsDB[0].dueDay) {
+            dueDayEl.value = cardsDB[0].dueDay;
+          }
         }
       }
     }
@@ -2353,6 +2405,7 @@
       const titleEl = document.getElementById('expenseTitle');
       const amountEl = document.getElementById('expenseAmount');
       const cardSelect = document.getElementById('expenseCard');
+      const dueDayEl = document.getElementById('expenseDueDay');
 
       const title = titleEl.value.trim();
       const amount = parseInputValue(amountEl.value);
@@ -2361,6 +2414,14 @@
       const selectedCard = cardsDB.find(c => c.id === cardId);
       const cardIssuer = selectedCard ? selectedCard.issuer : null;
       const cardNickname = selectedCard ? selectedCard.nickname : null;
+
+      let dueDay = dueDayEl && dueDayEl.value ? parseInt(dueDayEl.value, 10) : null;
+      if ((!dueDay || isNaN(dueDay)) && selectedCard && selectedCard.dueDay) {
+        dueDay = selectedCard.dueDay;
+      }
+      if (dueDay && (dueDay < 1 || dueDay > 31)) {
+        dueDay = null;
+      }
 
       if (!title || amount <= 0) {
         showToast('Informe a descrição e um valor válido');
@@ -2396,6 +2457,7 @@
             cardId,
             cardIssuer,
             cardNickname,
+            dueDay,
             isRecurring: false,
             isInstallment: true,
             currentInstallment: inst,
@@ -2435,6 +2497,7 @@
           cardId,
           cardIssuer,
           cardNickname,
+          dueDay,
           billingType: currentBillingType,
           isRecurring: isRec,
           isInstallment: false,
@@ -2461,6 +2524,13 @@
 
       titleEl.value = '';
       amountEl.value = '';
+      if (dueDayEl) {
+        if (selectedCard && selectedCard.dueDay) {
+          dueDayEl.value = selectedCard.dueDay;
+        } else {
+          dueDayEl.value = '';
+        }
+      }
       titleEl.focus();
     }
 
@@ -2700,6 +2770,15 @@
           let subtotal = 0;
           grp.items.forEach(it => subtotal += it.amount);
 
+          let cardDueNotice = '';
+          if (!isNone) {
+            const matchedCard = cardsDB.find(c => c.issuer === grp.key || c.nickname === grp.key || c.id === grp.items[0]?.cardId);
+            const dueDayFound = matchedCard?.dueDay || grp.items.find(it => it.dueDay)?.dueDay;
+            if (dueDayFound) {
+              cardDueNotice = `Venc. dia ${dueDayFound} • `;
+            }
+          }
+
           htmlOut += `
             <div class="tx-card-group-header">
               <div class="tx-card-group-title">
@@ -2717,7 +2796,7 @@
                 `}
                 <span>${escapeHTML(groupTitle)}</span>
               </div>
-              <span class="tx-card-group-subtotal tabular-num">${grp.items.length} ${grp.items.length === 1 ? 'item' : 'itens'} • ${formatBRL(subtotal)}</span>
+              <span class="tx-card-group-subtotal tabular-num">${cardDueNotice}${grp.items.length} ${grp.items.length === 1 ? 'item' : 'itens'} • ${formatBRL(subtotal)}</span>
             </div>
           `;
 
@@ -2772,6 +2851,7 @@
               <span class="tx-title" title="${escapeHTML(item.title)}">${escapeHTML(item.title)}</span>
               <div class="tx-meta">
                 ${isCard ? `<span class="tx-badge card-issuer">${escapeHTML(item.cardIssuer)}</span>` : ''}
+                ${item.dueDay ? `<span class="tx-badge tabular-num">Venc. dia ${item.dueDay}</span>` : ''}
                 ${item.isInstallment ? `<span class="tx-badge installment tabular-num">${item.currentInstallment} de ${item.totalInstallments}</span>` : ''}
                 ${item.isRecurring ? `<span class="tx-badge">Fixa</span>` : ''}
                 ${item.billingType === 'credit_single' ? `<span class="tx-badge">Crédito à vista</span>` : ''}
