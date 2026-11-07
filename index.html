@@ -1431,8 +1431,21 @@
             </div>
 
             <div class="input-field-group">
+              <label class="field-label" for="expenseDate">Data da compra</label>
+              <input type="date" id="expenseDate" class="input-text tabular-num" required onchange="onExpenseDateOrCardChange()">
+            </div>
+          </div>
+
+          <div class="field-row" style="margin-top: 12px;">
+            <div class="input-field-group">
               <label class="field-label" for="expenseDueDay">Dia de vencimento (opcional)</label>
-              <input type="number" id="expenseDueDay" class="input-text tabular-num" placeholder="Exemplo: 10" min="1" max="31">
+              <input type="number" id="expenseDueDay" class="input-text tabular-num" placeholder="Exemplo: 10" min="1" max="31" oninput="updateInvoiceCycleNotice()">
+            </div>
+
+            <div class="input-field-group" style="display: flex; flex-direction: column; justify-content: flex-end;">
+              <div id="invoiceCycleNotice" style="font-size: 12px; line-height: 1.4; color: var(--text-2); padding: 8px 12px; background: var(--surface-2); border-radius: 8px; border: 1px solid var(--border); min-height: 40px; display: flex; align-items: center;">
+                <!-- Preenchido dinamicamente via JS -->
+              </div>
             </div>
           </div>
 
@@ -1617,7 +1630,7 @@
       <!-- FORMULÁRIO DE CADASTRO DE CARTÃO -->
       <div class="card-box">
         <h2 class="section-heading">Cadastrar novo cartão</h2>
-        <p class="section-desc">Vincule seus cartões e dias de vencimento para organizar as despesas por prestadora.</p>
+        <p class="section-desc">Vincule seus cartões, dias de fechamento e vencimento para automatizar a alocação de parcelas.</p>
 
         <form id="cardForm" onsubmit="submitNewCard(event)" style="display: flex; flex-direction: column; gap: 12px;">
           <div class="field-row">
@@ -1632,12 +1645,22 @@
             </div>
           </div>
 
-          <div class="input-field-group">
-            <label class="field-label" for="cardDueDay">Dia de vencimento da fatura</label>
-            <input type="number" id="cardDueDay" class="input-text tabular-num" placeholder="Exemplo: 10" min="1" max="31">
-            <span style="font-size: 11px; color: var(--text-3);">
-              Preenche automaticamente o vencimento de compras lançadas neste cartão.
-            </span>
+          <div class="field-row">
+            <div class="input-field-group">
+              <label class="field-label" for="cardClosingDay">Dia de fechamento da fatura</label>
+              <input type="number" id="cardClosingDay" class="input-text tabular-num" placeholder="Exemplo: 3" min="1" max="31">
+              <span style="font-size: 11px; color: var(--text-3);">
+                Compras após este dia caem na fatura do mês seguinte.
+              </span>
+            </div>
+
+            <div class="input-field-group">
+              <label class="field-label" for="cardDueDay">Dia de vencimento da fatura</label>
+              <input type="number" id="cardDueDay" class="input-text tabular-num" placeholder="Exemplo: 10" min="1" max="31">
+              <span style="font-size: 11px; color: var(--text-3);">
+                Preenche automaticamente o vencimento de compras neste cartão.
+              </span>
+            </div>
           </div>
 
           <button type="submit" class="btn-primary" style="margin-top: 6px;">
@@ -1867,6 +1890,17 @@
       loadCards();
       setupCardSelectionListener();
       setupCurrencyInputMask();
+
+      const dateEl = document.getElementById('expenseDate');
+      if (dateEl && !dateEl.value) {
+        const now = new Date();
+        const y = now.getFullYear();
+        const m = String(now.getMonth() + 1).padStart(2, '0');
+        const d = String(now.getDate()).padStart(2, '0');
+        dateEl.value = `${y}-${m}-${d}`;
+      }
+
+      updateInvoiceCycleNotice();
       updateInstallmentHint();
       autoSyncRecurringExpenses(viewYear, viewMonth);
       syncSortButtonsVisual();
@@ -2145,15 +2179,20 @@
         const raw = localStorage.getItem(CARDS_KEY);
         if (raw) {
           cardsDB = JSON.parse(raw);
+          cardsDB.forEach(c => {
+            if (c.id === 'card_inter' && !c.closingDay) {
+              c.closingDay = 3;
+            }
+          });
         } else {
           cardsDB = [
-            { id: 'card_inter', nickname: 'Meu Cartão Inter', issuer: 'Inter', dueDay: 10 }
+            { id: 'card_inter', nickname: 'Meu Cartão Inter', issuer: 'Inter', closingDay: 3, dueDay: 10 }
           ];
           localStorage.setItem(CARDS_KEY, JSON.stringify(cardsDB));
         }
       } catch (e) {
         cardsDB = [
-          { id: 'card_inter', nickname: 'Meu Cartão Inter', issuer: 'Inter', dueDay: 10 }
+          { id: 'card_inter', nickname: 'Meu Cartão Inter', issuer: 'Inter', closingDay: 3, dueDay: 10 }
         ];
       }
       populateCardsSelect();
@@ -2173,9 +2212,13 @@
 
       select.innerHTML = `
         <option value="">Sem cartão (Boleto, Pix ou Dinheiro)</option>
-        ${cardsDB.map(card => `
-          <option value="${card.id}">${escapeHTML(card.issuer)} · ${escapeHTML(card.nickname)}${card.dueDay ? ` (Venc. dia ${card.dueDay})` : ''}</option>
-        `).join('')}
+        ${cardsDB.map(card => {
+          const parts = [];
+          if (card.closingDay) parts.push(`Fecha dia ${card.closingDay}`);
+          if (card.dueDay) parts.push(`Venc. dia ${card.dueDay}`);
+          const metaStr = parts.length > 0 ? ` (${parts.join(' · ')})` : '';
+          return `<option value="${card.id}">${escapeHTML(card.issuer)} · ${escapeHTML(card.nickname)}${metaStr}</option>`;
+        }).join('')}
       `;
 
       if (previousValue && cardsDB.some(c => c.id === previousValue)) {
@@ -2187,6 +2230,7 @@
           dueDayEl.value = cardsDB[0].dueDay;
         }
       }
+      updateInvoiceCycleNotice();
     }
 
     function renderCardsList() {
@@ -2210,11 +2254,16 @@
         return;
       }
 
-      container.innerHTML = cardsDB.map(card => `
+      container.innerHTML = cardsDB.map(card => {
+        const parts = [];
+        if (card.closingDay) parts.push(`Fechamento dia ${card.closingDay}`);
+        if (card.dueDay) parts.push(`Vencimento dia ${card.dueDay}`);
+        const metaStr = parts.length > 0 ? ` • ${parts.join(' • ')}` : '';
+        return `
         <div class="card-item-box">
           <div class="card-item-details">
             <span class="card-item-name">${escapeHTML(card.nickname)}</span>
-            <span class="card-item-issuer">${escapeHTML(card.issuer)}${card.dueDay ? ` • Vencimento dia ${card.dueDay}` : ''}</span>
+            <span class="card-item-issuer">${escapeHTML(card.issuer)}${metaStr}</span>
           </div>
           <button type="button" class="btn-remove-tx" onclick="removeCard('${card.id}')" aria-label="Remover cartão" title="Excluir cartão">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -2224,17 +2273,20 @@
             </svg>
           </button>
         </div>
-      `).join('');
+      `;
+      }).join('');
     }
 
     function submitNewCard(event) {
       event.preventDefault();
       const nicknameInput = document.getElementById('cardNickname');
       const issuerInput = document.getElementById('cardIssuer');
+      const closingDayInput = document.getElementById('cardClosingDay');
       const dueDayInput = document.getElementById('cardDueDay');
 
       const nickname = nicknameInput.value.trim();
       const issuer = issuerInput.value.trim();
+      const cardClosingDay = closingDayInput && closingDayInput.value ? parseInt(closingDayInput.value, 10) : null;
       const cardDueDay = dueDayInput && dueDayInput.value ? parseInt(dueDayInput.value, 10) : null;
 
       if (!nickname || !issuer) {
@@ -2246,6 +2298,7 @@
         id: 'card_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
         nickname,
         issuer,
+        closingDay: cardClosingDay && cardClosingDay >= 1 && cardClosingDay <= 31 ? cardClosingDay : null,
         dueDay: cardDueDay && cardDueDay >= 1 && cardDueDay <= 31 ? cardDueDay : null
       };
 
@@ -2263,7 +2316,11 @@
 
       nicknameInput.value = '';
       issuerInput.value = '';
+      if (closingDayInput) closingDayInput.value = '';
       if (dueDayInput) dueDayInput.value = '';
+
+      updateInvoiceCycleNotice();
+      updateInstallmentHint();
 
       showToast(`Cartão ${issuer} cadastrado com sucesso`);
     }
@@ -2282,16 +2339,82 @@
       select.addEventListener('change', () => {
         const cardId = select.value;
         const dueDayEl = document.getElementById('expenseDueDay');
-        if (!dueDayEl) return;
         if (!cardId) {
-          dueDayEl.value = '';
-          return;
+          if (dueDayEl) dueDayEl.value = '';
+        } else {
+          const card = cardsDB.find(c => c.id === cardId);
+          if (card && card.dueDay && dueDayEl) {
+            dueDayEl.value = card.dueDay;
+          }
         }
-        const card = cardsDB.find(c => c.id === cardId);
-        if (card && card.dueDay) {
-          dueDayEl.value = card.dueDay;
-        }
+        updateInvoiceCycleNotice();
+        updateInstallmentHint();
       });
+    }
+
+    function onExpenseDateOrCardChange() {
+      updateInvoiceCycleNotice();
+      updateInstallmentHint();
+    }
+
+    function updateInvoiceCycleNotice() {
+      const noticeEl = document.getElementById('invoiceCycleNotice');
+      if (!noticeEl) return;
+
+      const cardSelect = document.getElementById('expenseCard');
+      const cardId = cardSelect ? cardSelect.value : '';
+      const dateEl = document.getElementById('expenseDate');
+
+      let dateVal = dateEl && dateEl.value ? dateEl.value : '';
+      let pYear, pMonth, pDay;
+
+      if (dateVal && dateVal.includes('-')) {
+        const parts = dateVal.split('-').map(Number);
+        pYear = parts[0];
+        pMonth = parts[1] - 1;
+        pDay = parts[2];
+      } else {
+        const now = new Date();
+        pYear = now.getFullYear();
+        pMonth = now.getMonth();
+        pDay = now.getDate();
+      }
+
+      if (!cardId) {
+        noticeEl.innerHTML = `<span style="color: var(--text-3);">Sem cartão de crédito selecionado (despesa direta no período).</span>`;
+        return;
+      }
+
+      const card = cardsDB.find(c => c.id === cardId);
+      if (!card) {
+        noticeEl.innerHTML = `<span style="color: var(--text-3);">Selecione um cartão para calcular o ciclo de fatura.</span>`;
+        return;
+      }
+
+      if (!card.closingDay) {
+        noticeEl.innerHTML = `<span style="color: var(--text-2);">Fatura sem dia de fechamento cadastrado. Entra no mês atual (${monthNames[pMonth]}/${pYear}).</span>`;
+        return;
+      }
+
+      const isAfterClosing = (pDay > card.closingDay);
+      if (isAfterClosing) {
+        const nextPeriod = calculateTargetPeriod(pYear, pMonth, 1);
+        const nextMonthName = monthNames[nextPeriod.month];
+        noticeEl.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span class="tx-badge" style="background: rgba(239, 68, 68, 0.12); color: var(--negative); border-color: rgba(239, 68, 68, 0.25); font-weight: 600;">Após fechamento (dia ${card.closingDay})</span>
+            <span style="color: var(--text-1);">Compra dia ${pDay}: entra na fatura de <strong>${nextMonthName}/${nextPeriod.year}</strong> (mês seguinte).</span>
+          </div>
+        `;
+      } else {
+        const currentMonthName = monthNames[pMonth];
+        noticeEl.innerHTML = `
+          <div style="display: flex; align-items: center; gap: 6px; flex-wrap: wrap;">
+            <span class="tx-badge" style="background: rgba(16, 185, 129, 0.12); color: var(--positive); border-color: rgba(16, 185, 129, 0.25); font-weight: 600;">Fatura aberta (fecha dia ${card.closingDay})</span>
+            <span style="color: var(--text-1);">Compra dia ${pDay}: entra na fatura de <strong>${currentMonthName}/${pYear}</strong> (mês atual).</span>
+          </div>
+        `;
+      }
     }
 
     /* CONTROLE STEPPER E ATALHOS DE PARCELAS */
@@ -2344,6 +2467,8 @@
           }
         }
       }
+      updateInvoiceCycleNotice();
+      updateInstallmentHint();
     }
 
     function updateInstallmentHint() {
@@ -2371,12 +2496,34 @@
       hint.style.color = 'var(--text-2)';
       const remainingCount = total - current;
 
+      const cardSelect = document.getElementById('expenseCard');
+      const cardId = cardSelect ? cardSelect.value : '';
+      const card = cardsDB.find(c => c.id === cardId);
+      const dateEl = document.getElementById('expenseDate');
+
+      let pYear = viewYear;
+      let pMonth = viewMonth;
+      let pDay = new Date().getDate();
+
+      if (dateEl && dateEl.value && dateEl.value.includes('-')) {
+        const pParts = dateEl.value.split('-').map(Number);
+        pYear = pParts[0];
+        pMonth = pParts[1] - 1;
+        pDay = pParts[2];
+      }
+
+      const isAfterClosing = !!(card && card.closingDay && pDay > card.closingDay);
+      const rolloverOffset = isAfterClosing ? 1 : 0;
+
+      const startPeriod = calculateTargetPeriod(pYear, pMonth, rolloverOffset);
+      const startMonthName = monthNames[startPeriod.month];
+      const finalPeriod = calculateTargetPeriod(pYear, pMonth, remainingCount + rolloverOffset);
+      const finalMonthName = monthNames[finalPeriod.month];
+
       if (remainingCount === 0) {
-        hint.textContent = `Última parcela (${current} de ${total}). O lançamento ocorrerá apenas neste mês e a dívida será concluída.`;
+        hint.textContent = `Última parcela (${current} de ${total}). Entra em ${startMonthName}/${startPeriod.year}${isAfterClosing ? ' (fatura do mês seguinte)' : ''} e a dívida será concluída.`;
       } else {
-        const finalPeriod = calculateTargetPeriod(viewYear, viewMonth, remainingCount);
-        const finalMonthName = monthNames[finalPeriod.month];
-        hint.textContent = `Lançará ${current} de ${total} neste mês e as parcelas restantes nos próximos ${remainingCount} mês(es). A dívida encerrará em ${finalMonthName} de ${finalPeriod.year}.`;
+        hint.textContent = `Lançará ${current} de ${total} em ${startMonthName}/${startPeriod.year}${isAfterClosing ? ' (fatura do mês seguinte)' : ''} e as parcelas restantes nos próximos ${remainingCount} mês(es). A dívida encerrará em ${finalMonthName} de ${finalPeriod.year}.`;
       }
     }
 
@@ -2477,6 +2624,7 @@
       const titleEl = document.getElementById('expenseTitle');
       const amountEl = document.getElementById('expenseAmount');
       const cardSelect = document.getElementById('expenseCard');
+      const dateEl = document.getElementById('expenseDate');
       const dueDayEl = document.getElementById('expenseDueDay');
 
       const title = titleEl.value.trim();
@@ -2486,6 +2634,34 @@
       const selectedCard = cardsDB.find(c => c.id === cardId);
       const cardIssuer = selectedCard ? selectedCard.issuer : null;
       const cardNickname = selectedCard ? selectedCard.nickname : null;
+
+      let purchaseDate = dateEl && dateEl.value ? dateEl.value : '';
+      let purchaseYear = viewYear;
+      let purchaseMonth = viewMonth;
+      let purchaseDay = 1;
+
+      if (purchaseDate && purchaseDate.includes('-')) {
+        const parts = purchaseDate.split('-').map(Number);
+        purchaseYear = parts[0];
+        purchaseMonth = parts[1] - 1;
+        purchaseDay = parts[2];
+      } else {
+        const now = new Date();
+        purchaseYear = now.getFullYear();
+        purchaseMonth = now.getMonth();
+        purchaseDay = now.getDate();
+        purchaseDate = `${purchaseYear}-${String(purchaseMonth + 1).padStart(2, '0')}-${String(purchaseDay).padStart(2, '0')}`;
+      }
+
+      // Cálculo se cai no mês atual ou no mês seguinte baseado no dia de fechamento
+      let rolloverOffset = 0;
+      let isAfterClosing = false;
+      if (selectedCard && selectedCard.closingDay) {
+        if (purchaseDay > selectedCard.closingDay) {
+          rolloverOffset = 1;
+          isAfterClosing = true;
+        }
+      }
 
       let dueDay = dueDayEl && dueDayEl.value ? parseInt(dueDayEl.value, 10) : null;
       if ((!dueDay || isNaN(dueDay)) && selectedCard && selectedCard.dueDay) {
@@ -2514,8 +2690,8 @@
         const installmentGroupId = 'inst_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4);
 
         for (let inst = currentInstallment; inst <= totalInstallments; inst++) {
-          const offset = inst - currentInstallment;
-          const target = calculateTargetPeriod(viewYear, viewMonth, offset);
+          const offset = (inst - currentInstallment) + rolloverOffset;
+          const target = calculateTargetPeriod(purchaseYear, purchaseMonth, offset);
 
           if (!expensesDB[target.key]) {
             expensesDB[target.key] = [];
@@ -2530,12 +2706,13 @@
             cardIssuer,
             cardNickname,
             dueDay,
+            purchaseDate,
             isRecurring: false,
             isInstallment: true,
             currentInstallment: inst,
             totalInstallments,
             isPaid: false,
-            timestamp: new Date().toISOString()
+            timestamp: new Date(purchaseYear, purchaseMonth, purchaseDay, 12, 0, 0).toISOString()
           };
 
           expensesDB[target.key].unshift(installmentEntry);
@@ -2544,14 +2721,21 @@
         persistDatabase();
 
         const remaining = totalInstallments - currentInstallment;
-        if (remaining > 0) {
+        const firstTarget = calculateTargetPeriod(purchaseYear, purchaseMonth, rolloverOffset);
+        const firstMonthName = monthNames[firstTarget.month];
+
+        if (isAfterClosing) {
+          showToast(`Parcela ${currentInstallment} lançada para ${firstMonthName} (após fechamento dia ${selectedCard.closingDay})`);
+        } else if (remaining > 0) {
           showToast(`Parcela ${currentInstallment} de ${totalInstallments} lançada (+${remaining} nos próximos meses)`);
         } else {
           showToast(`Última parcela lançada com sucesso (${totalInstallments} de ${totalInstallments})`);
         }
 
       } else {
-        const key = getPeriodKey();
+        const effOffset = (currentBillingType === 'recurring' ? 0 : rolloverOffset);
+        const target = calculateTargetPeriod(purchaseYear, purchaseMonth, effOffset);
+        const key = target.key;
         if (!expensesDB[key]) {
           expensesDB[key] = [];
         }
@@ -2570,11 +2754,12 @@
           cardIssuer,
           cardNickname,
           dueDay,
+          purchaseDate,
           billingType: currentBillingType,
           isRecurring: isRec,
           isInstallment: false,
           isPaid: false,
-          timestamp: new Date().toISOString()
+          timestamp: new Date(purchaseYear, purchaseMonth, purchaseDay, 12, 0, 0).toISOString()
         };
 
         expensesDB[key].unshift(entry);
@@ -2588,7 +2773,11 @@
         if (isRec) {
           toastMsg = 'Despesa fixa cadastrada e propagada para os meses seguintes';
         } else if (currentBillingType === 'credit_single') {
-          toastMsg = 'Compra em crédito à vista adicionada com sucesso';
+          if (isAfterClosing) {
+            toastMsg = `Crédito à vista lançado para ${monthNames[target.month]} (após fechamento dia ${selectedCard.closingDay})`;
+          } else {
+            toastMsg = 'Compra em crédito à vista adicionada com sucesso';
+          }
         }
 
         showToast(toastMsg);
@@ -2603,6 +2792,8 @@
           dueDayEl.value = '';
         }
       }
+      updateInvoiceCycleNotice();
+      updateInstallmentHint();
       titleEl.focus();
     }
 
@@ -2873,12 +3064,16 @@
           let subtotal = 0;
           grp.items.forEach(it => subtotal += it.amount);
 
-          let cardDueNotice = '';
+          let cardNotice = '';
           if (!isNone) {
             const matchedCard = cardsDB.find(c => c.issuer === grp.key || c.nickname === grp.key || c.id === grp.items[0]?.cardId);
-            const dueDayFound = matchedCard?.dueDay || grp.items.find(it => it.dueDay)?.dueDay;
-            if (dueDayFound) {
-              cardDueNotice = `Venc. dia ${dueDayFound} • `;
+            const closing = matchedCard?.closingDay;
+            const due = matchedCard?.dueDay || grp.items.find(it => it.dueDay)?.dueDay;
+            const parts = [];
+            if (closing) parts.push(`Fecha dia ${closing}`);
+            if (due) parts.push(`Venc. dia ${due}`);
+            if (parts.length > 0) {
+              cardNotice = `${parts.join(' · ')} • `;
             }
           }
 
@@ -2899,7 +3094,7 @@
                 `}
                 <span>${escapeHTML(groupTitle)}</span>
               </div>
-              <span class="tx-card-group-subtotal tabular-num">${cardDueNotice}${grp.items.length} ${grp.items.length === 1 ? 'item' : 'itens'} • ${formatBRL(subtotal)}</span>
+              <span class="tx-card-group-subtotal tabular-num">${cardNotice}${grp.items.length} ${grp.items.length === 1 ? 'item' : 'itens'} • ${formatBRL(subtotal)}</span>
             </div>
           `;
 
@@ -2918,7 +3113,10 @@
       const isCard = !!item.cardIssuer;
 
       let formattedDateStr = '';
-      if (item.timestamp) {
+      if (item.purchaseDate && item.purchaseDate.includes('-')) {
+        const parts = item.purchaseDate.split('-');
+        formattedDateStr = `${parts[2]}/${parts[1]}`;
+      } else if (item.timestamp) {
         const d = new Date(item.timestamp);
         formattedDateStr = `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}`;
       }
@@ -2959,7 +3157,7 @@
                 ${item.isRecurring ? `<span class="tx-badge">Fixa</span>` : ''}
                 ${item.billingType === 'credit_single' ? `<span class="tx-badge">Crédito à vista</span>` : ''}
                 ${periodMetaStr ? `<span class="tx-badge date-badge tabular-num">${periodMetaStr}</span>` : ''}
-                ${formattedDateStr ? `<span class="tx-badge date-badge tabular-num">${formattedDateStr}</span>` : ''}
+                ${formattedDateStr ? `<span class="tx-badge date-badge tabular-num" title="Data da compra">Compra ${formattedDateStr}</span>` : ''}
               </div>
             </div>
           </div>
