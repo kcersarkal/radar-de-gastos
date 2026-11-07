@@ -1347,12 +1347,12 @@
         <form id="expenseForm" onsubmit="submitExpense(event)">
           <div class="field-row">
             <div class="input-field-group">
-              <label class="field-label" for="expenseTitle">Descrição da conta</label>
+              <label class="field-label" for="expenseTitle">Descrição</label>
               <input type="text" id="expenseTitle" class="input-text" placeholder="Exemplo: Mercado, Farmácia, Shopping" required autocomplete="off">
             </div>
 
             <div class="input-field-group">
-              <label class="field-label" for="expenseAmount" id="amountLabel">Valor da parcela</label>
+              <label class="field-label" for="expenseAmount" id="amountLabel">Valor</label>
               <div class="currency-input-wrap">
                 <span class="currency-prefix">R$</span>
                 <input type="text" id="expenseAmount" class="input-text with-prefix tabular-num" placeholder="0,00" required inputmode="decimal">
@@ -1360,22 +1360,14 @@
             </div>
           </div>
 
-          <div class="field-row" style="margin-top: 12px;">
-            <!-- SELETOR DE CARTÕES -->
-            <div class="input-field-group">
-              <div class="field-label-row">
-                <label class="field-label" for="expenseCard">Cartão utilizado</label>
-                <button type="button" class="btn-text" onclick="switchTab('cards')">Gerenciar cartões</button>
-              </div>
-              <select id="expenseCard" class="select-input">
-                <!-- Preenchido dinamicamente via JS -->
-              </select>
+          <div class="input-field-group" style="margin-top: 12px;">
+            <div class="field-label-row">
+              <label class="field-label" for="expenseCard">Cartão utilizado</label>
+              <button type="button" class="btn-text" onclick="switchTab('cards')">Gerenciar cartões</button>
             </div>
-
-            <div class="input-field-group">
-              <label class="field-label" for="expenseDueDay">Dia de vencimento (opcional)</label>
-              <input type="number" id="expenseDueDay" class="input-text tabular-num" placeholder="Exemplo: 10" min="1" max="31">
-            </div>
+            <select id="expenseCard" class="select-input">
+              <!-- Preenchido dinamicamente via JS -->
+            </select>
           </div>
 
           <!-- SELEÇÃO DA NATUREZA DA DESPESA -->
@@ -1464,17 +1456,6 @@
         </form>
       </div>
 
-      <!-- BOTÃO DE UTILIDADE -->
-      <button type="button" class="btn-secondary" style="width: 100%; margin-bottom: 24px;" onclick="replicateRecurringBills()">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 12a9 9 0 0 0-9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
-          <path d="M3 3v5h5"></path>
-          <path d="M3 12a9 9 0 0 0 9 9 9.75 9.75 0 0 0 6.74-2.74L21 16"></path>
-          <path d="M16 21h5v-5"></path>
-        </svg>
-        Importar fixas do mês anterior
-      </button>
-
     </section>
 
     <!-- ========================================== -->
@@ -1528,7 +1509,7 @@
       <!-- FORMULÁRIO DE CADASTRO DE CARTÃO -->
       <div class="card-box">
         <h2 class="section-heading">Cadastrar novo cartão</h2>
-        <p class="section-desc">Vincule prestadoras para organizar faturas e vencimentos automáticos.</p>
+        <p class="section-desc">Vincule seus cartões para organizar as despesas por prestadora.</p>
 
         <form id="cardForm" onsubmit="submitNewCard(event)" style="display: flex; flex-direction: column; gap: 12px;">
           <div class="field-row">
@@ -1541,14 +1522,6 @@
               <label class="field-label" for="cardIssuer">Nome da prestadora / banco</label>
               <input type="text" id="cardIssuer" class="input-text" placeholder="Exemplo: Inter, Nubank, Itaú, Bradesco" required autocomplete="off">
             </div>
-          </div>
-
-          <div class="input-field-group">
-            <label class="field-label" for="cardDueDay">Dia de vencimento da fatura (opcional)</label>
-            <input type="number" id="cardDueDay" class="input-text tabular-num" placeholder="Exemplo: 10" min="1" max="31">
-            <span style="font-size: 11px; color: var(--text-3);">
-              Preenche automaticamente o vencimento de compras lançadas neste cartão.
-            </span>
           </div>
 
           <button type="submit" class="btn-primary" style="margin-top: 6px;">
@@ -1716,9 +1689,11 @@
     const CARDS_KEY = 'radar_despesas_cards_v2';
     const THEME_STORAGE_KEY = 'radar_despesas_theme_v2';
     const ACTIVE_TAB_KEY = 'radar_despesas_active_tab_v2';
+    const CANCELLED_RECURRING_KEY = 'radar_despesas_cancelled_recurring_v2';
 
     let expensesDB = {};
     let cardsDB = [];
+    let cancelledRecurring = {};
     let currentBillingType = 'single';
     let debtsScope = 'month'; // 'month' ou 'all'
     let debtsFilter = 'all';  // 'all', 'pending', 'paid'
@@ -1772,9 +1747,9 @@
       setupTheme();
       loadDatabase();
       loadCards();
-      setupCardSelectionListener();
       setupCurrencyInputMask();
       updateInstallmentHint();
+      autoSyncRecurringExpenses(viewYear, viewMonth);
 
       const savedTab = localStorage.getItem(ACTIVE_TAB_KEY) || 'home';
       switchTab(savedTab, false);
@@ -1897,14 +1872,35 @@
       } catch (err) {
         expensesDB = {};
       }
+      try {
+        const rawCancelled = localStorage.getItem(CANCELLED_RECURRING_KEY);
+        if (rawCancelled) {
+          cancelledRecurring = JSON.parse(rawCancelled);
+        }
+      } catch (err) {
+        cancelledRecurring = {};
+      }
     }
 
     function persistDatabase() {
       localStorage.setItem(DB_KEY, JSON.stringify(expensesDB));
+      localStorage.setItem(CANCELLED_RECURRING_KEY, JSON.stringify(cancelledRecurring));
       renderView();
     }
 
     function getPeriodKey(y = viewYear, m = viewMonth) {
+      return `${y}-${String(m + 1).padStart(2, '0')}`;
+    }
+
+    function periodKeyToMonths(key) {
+      const parts = key.split('-');
+      if (parts.length !== 2) return 0;
+      return (parseInt(parts[0], 10) * 12) + (parseInt(parts[1], 10) - 1);
+    }
+
+    function monthsToPeriodKey(totalMonths) {
+      const y = Math.floor(totalMonths / 12);
+      const m = totalMonths % 12;
       return `${y}-${String(m + 1).padStart(2, '0')}`;
     }
 
@@ -1919,6 +1915,108 @@
       };
     }
 
+    /* SINCRONIZAÇÃO AUTOMÁTICA DE GASTOS FIXOS (PROPAGAÇÃO CONTÍNUA) */
+    function autoSyncRecurringExpenses(targetYear, targetMonth) {
+      const recurringMap = new Map();
+      const existingKeys = Object.keys(expensesDB).filter(k => /^\d{4}-\d{2}$/.test(k));
+
+      // 1. Mapeia todas as despesas fixas da base e determina o mês de início
+      existingKeys.forEach(pKey => {
+        const list = expensesDB[pKey] || [];
+        list.forEach(item => {
+          if (item.isRecurring) {
+            if (!item.recurringId) {
+              item.recurringId = 'rec_' + item.title.trim().toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + (item.cardId || 'direct');
+            }
+            const pMonths = periodKeyToMonths(pKey);
+            if (!recurringMap.has(item.recurringId)) {
+              recurringMap.set(item.recurringId, {
+                recurringId: item.recurringId,
+                title: item.title,
+                amount: item.amount,
+                cardId: item.cardId || '',
+                cardIssuer: item.cardIssuer || null,
+                cardNickname: item.cardNickname || null,
+                startMonths: pMonths
+              });
+            } else {
+              const currentRec = recurringMap.get(item.recurringId);
+              if (pMonths < currentRec.startMonths) {
+                currentRec.startMonths = pMonths;
+              }
+            }
+          }
+        });
+      });
+
+      if (recurringMap.size === 0) return false;
+
+      // 2. Define o horizonte máximo de propagação (mês em tela ou meses futuros já existentes)
+      const targetMonths = (targetYear * 12) + targetMonth;
+      let maxMonths = targetMonths;
+      existingKeys.forEach(k => {
+        const m = periodKeyToMonths(k);
+        if (m > maxMonths) maxMonths = m;
+      });
+
+      let dbChanged = false;
+
+      // 3. Propaga para todos os meses intermediários até o horizonte
+      recurringMap.forEach(rec => {
+        const cancelledMonthKey = cancelledRecurring[rec.recurringId];
+        const cancelledMonths = cancelledMonthKey ? periodKeyToMonths(cancelledMonthKey) : Infinity;
+
+        for (let m = rec.startMonths; m <= maxMonths; m++) {
+          if (m >= cancelledMonths) {
+            break; // Fixa cancelada a partir deste mês
+          }
+
+          const curKey = monthsToPeriodKey(m);
+
+          if (!expensesDB[curKey]) {
+            expensesDB[curKey] = [];
+          }
+
+          const exists = expensesDB[curKey].some(x =>
+            x.recurringId === rec.recurringId ||
+            (x.isRecurring && x.title.trim().toLowerCase() === rec.title.trim().toLowerCase() && (x.cardId || '') === rec.cardId)
+          );
+
+          if (!exists) {
+            const [curY, curM1] = curKey.split('-').map(Number);
+            expensesDB[curKey].push({
+              id: 'tx_rec_' + curKey + '_' + rec.recurringId.replace(/^rec_/, '') + '_' + Math.random().toString(36).substr(2, 4),
+              recurringId: rec.recurringId,
+              title: rec.title,
+              amount: rec.amount,
+              cardId: rec.cardId,
+              cardIssuer: rec.cardIssuer,
+              cardNickname: rec.cardNickname,
+              isRecurring: true,
+              isInstallment: false,
+              isPaid: false,
+              timestamp: new Date(curY, curM1 - 1, 1, 12, 0, 0).toISOString()
+            });
+            dbChanged = true;
+          } else {
+            const existingItem = expensesDB[curKey].find(x =>
+              x.recurringId === rec.recurringId ||
+              (x.isRecurring && x.title.trim().toLowerCase() === rec.title.trim().toLowerCase() && (x.cardId || '') === rec.cardId)
+            );
+            if (existingItem && !existingItem.recurringId) {
+              existingItem.recurringId = rec.recurringId;
+              dbChanged = true;
+            }
+          }
+        }
+      });
+
+      if (dbChanged) {
+        localStorage.setItem(DB_KEY, JSON.stringify(expensesDB));
+      }
+      return dbChanged;
+    }
+
     /* GERENCIAMENTO DE CARTÕES (ABA 3) */
     function loadCards() {
       try {
@@ -1927,13 +2025,13 @@
           cardsDB = JSON.parse(raw);
         } else {
           cardsDB = [
-            { id: 'card_inter', nickname: 'Meu Cartão Inter', issuer: 'Inter', dueDay: 10 }
+            { id: 'card_inter', nickname: 'Meu Cartão Inter', issuer: 'Inter' }
           ];
           localStorage.setItem(CARDS_KEY, JSON.stringify(cardsDB));
         }
       } catch (e) {
         cardsDB = [
-          { id: 'card_inter', nickname: 'Meu Cartão Inter', issuer: 'Inter', dueDay: 10 }
+          { id: 'card_inter', nickname: 'Meu Cartão Inter', issuer: 'Inter' }
         ];
       }
       populateCardsSelect();
@@ -1954,7 +2052,7 @@
       select.innerHTML = `
         <option value="">Sem cartão (Boleto, Pix ou Dinheiro)</option>
         ${cardsDB.map(card => `
-          <option value="${card.id}">${escapeHTML(card.issuer)} · ${escapeHTML(card.nickname)}${card.dueDay ? ` (Venc. dia ${card.dueDay})` : ''}</option>
+          <option value="${card.id}">${escapeHTML(card.issuer)} · ${escapeHTML(card.nickname)}</option>
         `).join('')}
       `;
 
@@ -1990,7 +2088,7 @@
         <div class="card-item-box">
           <div class="card-item-details">
             <span class="card-item-name">${escapeHTML(card.nickname)}</span>
-            <span class="card-item-issuer">${escapeHTML(card.issuer)}${card.dueDay ? ` • Vencimento dia ${card.dueDay}` : ''}</span>
+            <span class="card-item-issuer">${escapeHTML(card.issuer)}</span>
           </div>
           <button type="button" class="btn-remove-tx" onclick="removeCard('${card.id}')" aria-label="Remover cartão" title="Excluir cartão">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -2007,11 +2105,9 @@
       event.preventDefault();
       const nicknameInput = document.getElementById('cardNickname');
       const issuerInput = document.getElementById('cardIssuer');
-      const dueDayInput = document.getElementById('cardDueDay');
 
       const nickname = nicknameInput.value.trim();
       const issuer = issuerInput.value.trim();
-      const cardDueDay = dueDayInput && dueDayInput.value ? parseInt(dueDayInput.value, 10) : null;
 
       if (!nickname || !issuer) {
         showToast('Preencha o apelido e o nome da prestadora');
@@ -2021,8 +2117,7 @@
       const newCard = {
         id: 'card_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
         nickname,
-        issuer,
-        dueDay: cardDueDay && cardDueDay >= 1 && cardDueDay <= 31 ? cardDueDay : null
+        issuer
       };
 
       cardsDB.push(newCard);
@@ -2035,7 +2130,6 @@
 
       nicknameInput.value = '';
       issuerInput.value = '';
-      if (dueDayInput) dueDayInput.value = '';
 
       showToast(`Cartão ${issuer} cadastrado com sucesso`);
     }
@@ -2046,19 +2140,6 @@
         saveCards();
         showToast('Cartão removido');
       }
-    }
-
-    function setupCardSelectionListener() {
-      const select = document.getElementById('expenseCard');
-      if (!select) return;
-      select.addEventListener('change', () => {
-        const cardId = select.value;
-        if (!cardId) return;
-        const card = cardsDB.find(c => c.id === cardId);
-        if (card && card.dueDay) {
-          document.getElementById('expenseDueDay').value = card.dueDay;
-        }
-      });
     }
 
     /* CONTROLE STEPPER E ATALHOS DE PARCELAS */
@@ -2166,6 +2247,7 @@
         viewMonth = 11;
         viewYear--;
       }
+      autoSyncRecurringExpenses(viewYear, viewMonth);
       updateInstallmentHint();
       renderView();
     }
@@ -2173,6 +2255,7 @@
     function jumpToCurrentMonth() {
       viewYear = systemYear;
       viewMonth = systemMonth;
+      autoSyncRecurringExpenses(viewYear, viewMonth);
       updateInstallmentHint();
       renderView();
     }
@@ -2183,12 +2266,10 @@
       const titleEl = document.getElementById('expenseTitle');
       const amountEl = document.getElementById('expenseAmount');
       const cardSelect = document.getElementById('expenseCard');
-      const dueDayEl = document.getElementById('expenseDueDay');
 
       const title = titleEl.value.trim();
       const amount = parseInputValue(amountEl.value);
       const cardId = cardSelect.value || '';
-      const dueDay = dueDayEl.value ? parseInt(dueDayEl.value, 10) : null;
 
       const selectedCard = cardsDB.find(c => c.id === cardId);
       const cardIssuer = selectedCard ? selectedCard.issuer : null;
@@ -2228,7 +2309,6 @@
             cardId,
             cardIssuer,
             cardNickname,
-            dueDay,
             isRecurring: false,
             isInstallment: true,
             currentInstallment: inst,
@@ -2255,15 +2335,20 @@
           expensesDB[key] = [];
         }
 
+        const isRec = (currentBillingType === 'recurring');
+        const recId = isRec
+          ? ('rec_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4))
+          : null;
+
         const entry = {
           id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+          recurringId: recId,
           title,
           amount,
           cardId,
           cardIssuer,
           cardNickname,
-          dueDay,
-          isRecurring: (currentBillingType === 'recurring'),
+          isRecurring: isRec,
           isInstallment: false,
           isPaid: false,
           timestamp: new Date().toISOString()
@@ -2272,12 +2357,15 @@
         expensesDB[key].unshift(entry);
         persistDatabase();
 
-        showToast(currentBillingType === 'recurring' ? 'Despesa fixa adicionada com sucesso' : 'Despesa adicionada com sucesso');
+        if (isRec) {
+          autoSyncRecurringExpenses(viewYear, viewMonth);
+        }
+
+        showToast(isRec ? 'Despesa fixa cadastrada e propagada para os meses seguintes' : 'Despesa adicionada com sucesso');
       }
 
       titleEl.value = '';
       amountEl.value = '';
-      dueDayEl.value = '';
       titleEl.focus();
     }
 
@@ -2297,57 +2385,28 @@
     function removeExpense(id, periodKey) {
       const key = periodKey || getPeriodKey();
       if (!expensesDB[key]) return;
+
+      const item = expensesDB[key].find(x => x.id === id);
+      if (!item) return;
+
+      if (item.isRecurring) {
+        const cancelFuture = confirm('Esta é uma despesa fixa. Deseja cancelar sua repetição também nos meses seguintes?');
+        if (cancelFuture) {
+          const recId = item.recurringId || ('rec_' + item.title.trim().toLowerCase().replace(/[^a-z0-9]/g, '_') + '_' + (item.cardId || 'direct'));
+          cancelledRecurring[recId] = key;
+          localStorage.setItem(CANCELLED_RECURRING_KEY, JSON.stringify(cancelledRecurring));
+
+          Object.keys(expensesDB).forEach(k => {
+            if (k > key) {
+              expensesDB[k] = expensesDB[k].filter(x => x.recurringId !== recId);
+            }
+          });
+        }
+      }
+
       expensesDB[key] = expensesDB[key].filter(x => x.id !== id);
       persistDatabase();
       showToast('Registro removido');
-    }
-
-    /* REPLICAR DESPESAS FIXAS DO MÊS ANTERIOR */
-    function replicateRecurringBills() {
-      const prev = calculateTargetPeriod(viewYear, viewMonth, -1);
-      const currentKey = getPeriodKey();
-
-      const sourceList = expensesDB[prev.key] || [];
-      const recurringItems = sourceList.filter(item => item.isRecurring);
-
-      if (recurringItems.length === 0) {
-        showToast('Nenhuma despesa fixa encontrada no mês anterior');
-        return;
-      }
-
-      if (!expensesDB[currentKey]) {
-        expensesDB[currentKey] = [];
-      }
-
-      let count = 0;
-      recurringItems.forEach(rec => {
-        const alreadyExists = expensesDB[currentKey].some(
-          cur => cur.title.toLowerCase() === rec.title.toLowerCase() && cur.isRecurring
-        );
-        if (!alreadyExists) {
-          expensesDB[currentKey].push({
-            id: 'tx_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-            title: rec.title,
-            amount: rec.amount,
-            cardId: rec.cardId,
-            cardIssuer: rec.cardIssuer,
-            cardNickname: rec.cardNickname,
-            dueDay: rec.dueDay,
-            isRecurring: true,
-            isInstallment: false,
-            isPaid: false,
-            timestamp: new Date().toISOString()
-          });
-          count++;
-        }
-      });
-
-      if (count > 0) {
-        persistDatabase();
-        showToast(`${count} despesa(s) fixa(s) importada(s)`);
-      } else {
-        showToast('As despesas fixas do mês anterior já constam no período atual');
-      }
     }
 
     /* FILTROS DA ABA DÍVIDAS */
@@ -2368,6 +2427,7 @@
 
     /* RENDERIZAÇÃO GERAL */
     function renderView() {
+      autoSyncRecurringExpenses(viewYear, viewMonth);
       renderHomeSummary();
       renderDebtsList();
       renderCardsList();
@@ -2528,7 +2588,6 @@
                 <span class="tx-title" title="${escapeHTML(item.title)}">${escapeHTML(item.title)}</span>
                 <div class="tx-meta">
                   ${isCard ? `<span class="tx-badge card-issuer">${escapeHTML(item.cardIssuer)}</span>` : ''}
-                  ${item.dueDay ? `<span class="tx-badge tabular-num">Venc. dia ${item.dueDay}</span>` : ''}
                   ${item.isInstallment ? `<span class="tx-badge installment tabular-num">${item.currentInstallment} de ${item.totalInstallments}</span>` : ''}
                   ${item.isRecurring ? `<span class="tx-badge">Fixa</span>` : ''}
                   ${periodMetaStr ? `<span class="tx-badge date-badge tabular-num">${periodMetaStr}</span>` : ''}
@@ -2564,6 +2623,7 @@
       const backupPayload = {
         expenses: expensesDB,
         cards: cardsDB,
+        cancelledRecurring: cancelledRecurring,
         exportDate: new Date().toISOString()
       };
       const dataStr = 'data:text/json;charset=utf-8,' + encodeURIComponent(JSON.stringify(backupPayload, null, 2));
@@ -2588,6 +2648,7 @@
             if (parsed.expenses) {
               expensesDB = parsed.expenses;
               cardsDB = parsed.cards || [];
+              cancelledRecurring = parsed.cancelledRecurring || {};
             } else {
               expensesDB = parsed;
             }
@@ -2608,6 +2669,8 @@
     function confirmResetAllData() {
       if (confirm('Atenção: todos os registros de dívidas deste dispositivo serão excluídos permanentemente. Confirma a exclusão?')) {
         expensesDB = {};
+        cancelledRecurring = {};
+        localStorage.removeItem(CANCELLED_RECURRING_KEY);
         persistDatabase();
         showToast('Todas as dívidas foram excluídas');
       }
